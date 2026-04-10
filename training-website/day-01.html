@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Day 1 — Azure App Service + Terraform Basics</title>
+  <link rel="stylesheet" href="assets/style.css" />
+</head>
+<body>
+  <nav class="sidebar">
+    <div class="sidebar-header">
+      <div class="logo">⚡ Azure Training</div>
+      <div class="subtitle">Apr 7–30, 2026</div>
+    </div>
+    <ul class="nav-list">
+      <li><a href="index.html" class="nav-link">🏠 Overview</a></li>
+      <li class="nav-section">Week 1</li>
+      <li><a href="day-01.html" class="nav-link active">Day 1 — App Service + Terraform</a></li>
+      <li><a href="day-02.html" class="nav-link">Day 2 — SQL + Containers</a></li>
+      <li><a href="day-03.html" class="nav-link">Day 3 — Auth + APIM</a></li>
+      <li class="nav-section">Week 2</li>
+      <li><a href="day-04.html" class="nav-link">Day 4 — DevOps + Modules</a></li>
+      <li><a href="day-05.html" class="nav-link">Day 5 — CI/CD + AKS</a></li>
+      <li><a href="day-06.html" class="nav-link">Day 6 — GitHub Actions</a></li>
+      <li class="nav-section">Week 3</li>
+      <li><a href="day-07.html" class="nav-link">Day 7 — Release Strategies</a></li>
+      <li><a href="day-08.html" class="nav-link">Day 8 — Canary + A/B Testing</a></li>
+      <li><a href="day-09.html" class="nav-link">Day 9 — Security</a></li>
+      <li class="nav-section">Week 4</li>
+      <li><a href="day-10.html" class="nav-link">Day 10 — Full Pipeline POC</a></li>
+      <li><a href="day-11.html" class="nav-link">Day 11 — 3-Tier + GitOps</a></li>
+      <li><a href="day-12.html" class="nav-link">Day 12 — Interview Prep</a></li>
+    </ul>
+  </nav>
+
+  <main class="main">
+    <header class="page-header">
+      <h1>Day 1 — Azure App Service + Terraform Basics</h1>
+      <div class="day-meta">
+        <span>📅 April 7, 2026</span>
+        <span>👥 Varsha &amp; Gowtham</span>
+        <span>🔬 POC 1 Start</span>
+      </div>
+    </header>
+
+    <div class="day-nav">
+      <a href="index.html">← Overview</a>
+      <a href="day-02.html" class="next">Day 2 →</a>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs" data-group="d1">
+      <button class="tab-btn active" data-group="d1" data-tab="theory">📖 Theory</button>
+      <button class="tab-btn" data-group="d1" data-tab="poc">🔬 POC</button>
+      <button class="tab-btn" data-group="d1" data-tab="qa">❓ Interview Q&amp;A</button>
+    </div>
+
+    <!-- ── THEORY ── -->
+    <div class="tab-panel active" data-group="d1" data-tab="theory">
+
+      <div class="info-box blue">
+        <strong>Today's Goal:</strong> Understand Azure App Service Plans, Web Apps, Azure Functions, Deployment Slots, and Auto-scaling. Write your first Terraform configuration with remote state.
+      </div>
+
+      <section class="section">
+        <h2 class="section-title">App Service Plan Tiers</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Tier</th><th>Auto-Scale</th><th>Slots</th><th>VNet</th><th>Use For</th></tr></thead>
+            <tbody>
+              <tr><td>Free / Basic</td><td>❌</td><td>❌</td><td>❌</td><td>Dev/test only</td></tr>
+              <tr><td>Standard</td><td>✅ (10)</td><td>✅ (5)</td><td>Limited</td><td>Small production</td></tr>
+              <tr><td><strong>Premium v3</strong></td><td>✅ (30)</td><td>✅ (20)</td><td>✅ Full</td><td><strong>Enterprise production</strong></td></tr>
+              <tr><td>Isolated v2</td><td>✅ (100)</td><td>✅ (20)</td><td>✅ Dedicated</td><td>Compliance (PCI, HIPAA)</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="info-box green" style="margin-top:16px">
+          <strong>Rule:</strong> For production with auto-scale + VNet → use <strong>Premium v3 P1v3</strong> minimum.
+        </div>
+      </section>
+
+      <section class="section">
+        <h2 class="section-title">Create a Web App</h2>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
+          <pre><span class="cm"># Create resource group</span>
+az group create --name rg-training-dev --location eastus2
+
+<span class="cm"># Create Premium v3 App Service Plan</span>
+az appservice plan create \
+  --name asp-training-dev \
+  --resource-group rg-training-dev \
+  --sku P1v3 \
+  --is-linux
+
+<span class="cm"># Create Web App (.NET 8)</span>
+az webapp create \
+  --name app-training-dev \
+  --resource-group rg-training-dev \
+  --plan asp-training-dev \
+  --runtime <span class="str">"DOTNETCORE:8.0"</span>
+
+<span class="cm"># Enable Managed Identity (no passwords!)</span>
+az webapp identity assign \
+  --name app-training-dev \
+  --resource-group rg-training-dev</pre>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2 class="section-title">Deployment Slots — Zero-Downtime Deployments</h2>
+        <div class="two-col">
+          <div class="card">
+            <div class="card-title">✅ Slot-Specific Settings (Stay with slot)</div>
+            <ul>
+              <li><code>ASPNETCORE_ENVIRONMENT</code></li>
+              <li>Application Insights key</li>
+              <li>Slot-specific feature flags</li>
+            </ul>
+          </div>
+          <div class="card">
+            <div class="card-title">🔄 Regular Settings (Swap with app)</div>
+            <ul>
+              <li>Feature flags for the release</li>
+              <li>API endpoints</li>
+              <li>Application configuration</li>
+            </ul>
+          </div>
+        </div>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
+          <pre><span class="cm"># Create staging slot</span>
+az webapp deployment slot create \
+  --name app-training-dev \
+  --resource-group rg-training-dev \
+  --slot staging
+
+<span class="cm"># Swap staging → production (zero downtime)</span>
+az webapp deployment slot swap \
+  --name app-training-dev \
+  --resource-group rg-training-dev \
+  --slot staging --target-slot production
+
+<span class="cm"># Rollback: swap back (&lt; 30 seconds)</span>
+az webapp deployment slot swap \
+  --name app-training-dev \
+  --resource-group rg-training-dev \
+  --slot production --target-slot staging</pre>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2 class="section-title">Auto-Scaling</h2>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
+          <pre><span class="cm"># Enable auto-scale (min 2, max 10 instances)</span>
+az monitor autoscale create \
+  --resource-group rg-training-dev \
+  --resource asp-training-dev \
+  --resource-type Microsoft.Web/serverfarms \
+  --name autoscale-training \
+  --min-count <span class="num">2</span> --max-count <span class="num">10</span> --count <span class="num">2</span>
+
+<span class="cm"># Scale OUT when CPU &gt; 70% for 5 minutes</span>
+az monitor autoscale rule create \
+  --resource-group rg-training-dev \
+  --autoscale-name autoscale-training \
+  --condition <span class="str">"Percentage CPU &gt; 70 avg 5m"</span> \
+  --scale out <span class="num">2</span>
+
+<span class="cm"># Scale IN when CPU &lt; 30% for 10 minutes</span>
+az monitor autoscale rule create \
+  --resource-group rg-training-dev \
+  --autoscale-name autoscale-training \
+  --condition <span class="str">"Percentage CPU &lt; 30 avg 10m"</span> \
+  --scale in <span class="num">1</span></pre>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2 class="section-title">Azure Functions — Hosting Plans</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Plan</th><th>Cold Start</th><th>VNet</th><th>Cost</th><th>Use When</th></tr></thead>
+            <tbody>
+              <tr><td>Consumption</td><td>Yes (5–15s)</td><td>Limited</td><td>Pay per call</td><td>Sporadic, can tolerate cold starts</td></tr>
+              <tr><td><strong>Premium (EP1)</strong></td><td>No</td><td>✅</td><td>~$125/mo</td><td>API, needs VNet, no cold starts</td></tr>
+              <tr><td>Dedicated</td><td>No</td><td>✅</td><td>App Service Plan</td><td>Already have a plan</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2 class="section-title">Terraform Basics</h2>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">hcl</span><button class="copy-btn">Copy</button></div>
+          <pre><span class="cm"># versions.tf — always pin provider versions</span>
+<span class="kw">terraform</span> {
+  required_version = <span class="str">">= 1.5.0"</span>
+  required_providers {
+    azurerm = { source = <span class="str">"hashicorp/azurerm"</span>; version = <span class="str">"~> 3.90"</span> }
+  }
+  <span class="cm"># Remote state — always use in teams</span>
+  backend <span class="str">"azurerm"</span> {
+    resource_group_name  = <span class="str">"rg-terraform-state"</span>
+    storage_account_name = <span class="str">"stterraformstate001"</span>
+    container_name       = <span class="str">"tfstate"</span>
+    key                  = <span class="str">"training/dev/terraform.tfstate"</span>
+  }
+}
+
+<span class="cm"># main.tf</span>
+<span class="kw">resource</span> <span class="str">"azurerm_resource_group"</span> <span class="str">"main"</span> {
+  name     = <span class="str">"rg-${local.prefix}"</span>
+  location = <span class="kw">var</span>.location
+  tags     = <span class="kw">local</span>.tags
+}
+
+<span class="kw">resource</span> <span class="str">"azurerm_service_plan"</span> <span class="str">"main"</span> {
+  name                = <span class="str">"asp-${local.prefix}"</span>
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+  os_type             = <span class="str">"Linux"</span>
+  sku_name            = <span class="str">"P1v3"</span>
+}
+
+<span class="kw">resource</span> <span class="str">"azurerm_linux_web_app"</span> <span class="str">"main"</span> {
+  name                = <span class="str">"app-${local.prefix}"</span>
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+  service_plan_id     = azurerm_service_plan.main.id
+  https_only          = <span class="kw">true</span>
+
+  identity { type = <span class="str">"SystemAssigned"</span> }
+  site_config { application_stack { dotnet_version = <span class="str">"8.0"</span> } }
+}</pre>
+        </div>
+
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">bash — Core Workflow</span><button class="copy-btn">Copy</button></div>
+          <pre>terraform init       <span class="cm"># Download providers, configure backend</span>
+terraform fmt        <span class="cm"># Format code</span>
+terraform validate   <span class="cm"># Check syntax</span>
+terraform plan -out=tfplan   <span class="cm"># Preview changes (always do this first!)</span>
+terraform apply tfplan       <span class="cm"># Apply saved plan</span>
+terraform destroy            <span class="cm"># Destroy everything</span></pre>
+        </div>
+      </section>
+    </div>
+
+    <!-- ── POC ── -->
+    <div class="tab-panel" data-group="d1" data-tab="poc">
+      <div class="info-box blue">
+        <strong>POC 1 Goal:</strong> Deploy App Service with staging slot + VNet + NSG using Terraform with remote state in Azure Storage.
+      </div>
+
+      <section class="section">
+        <h2 class="section-title">Step 1 — Bootstrap Remote State</h2>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
+          <pre>az group create --name rg-terraform-state --location eastus2
+
+az storage account create \
+  --name stterraformstate001 \
+  --resource-group rg-terraform-state \
+  --sku Standard_LRS
+
+az storage container create \
+  --name tfstate \
+  --account-name stterraformstate001</pre>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2 class="section-title">Step 2 — Terraform Configuration</h2>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">hcl — main.tf</span><button class="copy-btn">Copy</button></div>
+          <pre><span class="kw">resource</span> <span class="str">"azurerm_virtual_network"</span> <span class="str">"main"</span> {
+  name                = <span class="str">"vnet-poc1-dev"</span>
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+  address_space       = [<span class="str">"10.0.0.0/16"</span>]
+}
+
+<span class="kw">resource</span> <span class="str">"azurerm_subnet"</span> <span class="str">"web"</span> {
+  name                 = <span class="str">"snet-web"</span>
+  resource_group_name  = azurerm_resource_group.main.name
+  virtual_network_name = azurerm_virtual_network.main.name
+  address_prefixes     = [<span class="str">"10.0.1.0/24"</span>]
+}
+
+<span class="kw">resource</span> <span class="str">"azurerm_network_security_group"</span> <span class="str">"web"</span> {
+  name                = <span class="str">"nsg-web-poc1"</span>
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+
+  security_rule {
+    name                       = <span class="str">"AllowHTTPS"</span>
+    priority                   = <span class="num">100</span>
+    direction                  = <span class="str">"Inbound"</span>
+    access                     = <span class="str">"Allow"</span>
+    protocol                   = <span class="str">"Tcp"</span>
+    source_port_range          = <span class="str">"*"</span>
+    destination_port_range     = <span class="str">"443"</span>
+    source_address_prefix      = <span class="str">"Internet"</span>
+    destination_address_prefix = <span class="str">"*"</span>
+  }
+}
+
+<span class="kw">resource</span> <span class="str">"azurerm_linux_web_app_slot"</span> <span class="str">"staging"</span> {
+  name           = <span class="str">"staging"</span>
+  app_service_id = azurerm_linux_web_app.main.id
+  site_config    { application_stack { dotnet_version = <span class="str">"8.0"</span> } }
+  app_settings   = { <span class="str">"ASPNETCORE_ENVIRONMENT"</span> = <span class="str">"Staging"</span> }
+}</pre>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2 class="section-title">Step 3 — Deploy &amp; Validate</h2>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
+          <pre>terraform init
+terraform plan -out=tfplan
+terraform apply tfplan
+
+<span class="cm"># Validate</span>
+az webapp show --name app-poc1-dev --resource-group rg-poc1-dev \
+  --query state -o tsv
+<span class="cm"># Expected: Running</span>
+
+az webapp deployment slot list --name app-poc1-dev \
+  --resource-group rg-poc1-dev --query "[].name" -o tsv
+<span class="cm"># Expected: staging</span>
+
+az storage blob list --account-name stterraformstate001 \
+  --container-name tfstate --query "[].name" -o tsv
+<span class="cm"># Expected: training/dev/terraform.tfstate</span></pre>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2 class="section-title">✅ Validation Checklist</h2>
+        <ul class="checklist">
+          <li>App Service returns 200 on /health</li>
+          <li>Staging slot accessible at &lt;appname&gt;-staging.azurewebsites.net</li>
+          <li>Remote state stored in Azure Storage blob</li>
+          <li>VNet and NSG created with correct rules</li>
+          <li>All resources tagged with environment/team</li>
+        </ul>
+      </section>
+    </div>
+
+    <!-- ── Q&A ── -->
+    <div class="tab-panel" data-group="d1" data-tab="qa">
+      <div class="info-box orange">
+        <strong>Interview Tip:</strong> These are the most common questions asked about App Service and Terraform basics. Practice answering out loud.
+      </div>
+
+      <div class="qa-list">
+        <div class="qa-item">
+          <button class="qa-question">What App Service Plan tier would you choose for a production app needing auto-scale and VNet integration? <span class="qa-arrow">▼</span></button>
+          <div class="qa-answer"><p>Premium v3 P1v3 minimum. Standard supports auto-scale but has limited VNet integration. Premium v3 gives full VNet integration, up to 20 deployment slots, and better price/performance on newer hardware. With a 1-year Reserved Instance it's ~35% cheaper than pay-as-you-go.</p></div>
+        </div>
+        <div class="qa-item">
+          <button class="qa-question">What is the difference between a slot-specific setting and a regular app setting? <span class="qa-arrow">▼</span></button>
+          <div class="qa-answer"><p>Slot-specific settings stay with the slot after a swap — they're bound to the environment, not the app version. Example: <code>ASPNETCORE_ENVIRONMENT=Staging</code> should be slot-specific so it doesn't become "Staging" in production after a swap. Regular settings swap with the app code — use these for feature flags or config that's part of the release.</p></div>
+        </div>
+        <div class="qa-item">
+          <button class="qa-question">When would you use Azure Functions Premium plan instead of Consumption? <span class="qa-arrow">▼</span></button>
+          <div class="qa-answer"><p>When you need: no cold starts (API with latency requirements), VNet integration (access private SQL/Redis), execution time &gt; 10 minutes, or always-warm instances. Consumption is fine for background jobs and event processing that can tolerate 5–15 second cold starts.</p></div>
+        </div>
+        <div class="qa-item">
+          <button class="qa-question">What is Terraform state and why is remote state important? <span class="qa-arrow">▼</span></button>
+          <div class="qa-answer"><p>State is a JSON file mapping your Terraform config to real Azure resources. Without it, Terraform can't know what already exists. Remote state (Azure Storage) is essential for teams because: it prevents conflicts when multiple people run Terraform, provides state locking (blob leases prevent concurrent applies), and gives a shared source of truth. Never use local state in a team.</p></div>
+        </div>
+        <div class="qa-item">
+          <button class="qa-question">What does <code>terraform plan</code> do and why should you always run it first? <span class="qa-arrow">▼</span></button>
+          <div class="qa-answer"><p>Shows exactly what changes Terraform will make — creates, updates, or destroys — without making them. Always run <code>plan</code> before <code>apply</code> and review every change. In CI/CD, save the plan (<code>-out=tfplan</code>) and apply that exact plan to ensure what you reviewed is what gets applied.</p></div>
+        </div>
+        <div class="qa-item">
+          <button class="qa-question">What happens to in-flight requests during a slot swap? <span class="qa-arrow">▼</span></button>
+          <div class="qa-answer"><p>App Service drains in-flight requests before completing the swap. Requests that started on the old slot complete on the old slot. New requests after the swap go to the new slot. The swap is atomic from the user's perspective — there's no period where some requests go to old and some to new. This is why blue-green with slots is truly zero-downtime.</p></div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+  <script src="assets/app.js"></script>
+</body>
+</html>

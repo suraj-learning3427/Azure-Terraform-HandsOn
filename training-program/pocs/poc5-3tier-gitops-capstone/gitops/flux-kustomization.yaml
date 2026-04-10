@@ -1,0 +1,49 @@
+---
+# Flux Kustomization: sync application from Git
+apiVersion: kustomize.toolkit.fluxcd.io/v1
+kind: Kustomization
+metadata:
+  name: myapp-production
+  namespace: flux-system
+spec:
+  interval: 1m
+  path: ./gitops/production
+  prune: true  # Remove resources deleted from Git
+  sourceRef:
+    kind: GitRepository
+    name: myapp-gitops
+  healthChecks:
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: myapp-web
+      namespace: production
+    - apiVersion: apps/v1
+      kind: Deployment
+      name: myapp-api
+      namespace: production
+  timeout: 5m
+---
+# Flux HelmRelease: deploy via Helm chart
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: myapp
+  namespace: production
+spec:
+  interval: 5m
+  chart:
+    spec:
+      chart: ./helm/myapp
+      sourceRef:
+        kind: GitRepository
+        name: myapp-gitops
+      interval: 1m
+  values:
+    image:
+      tag: "latest"  # Updated by CI pipeline
+  upgrade:
+    remediation:
+      retries: 3
+  rollback:
+    timeout: 5m
+    cleanupOnFail: true

@@ -1,0 +1,195 @@
+# POC 3: Full CI/CD Pipeline — Build → ACR → App Service Slots + AKS
+trigger:
+  branches:
+    include: [main]
+
+variables:
+  acrName: 'acrpoc3prod'
+  imageName: 'myapp'
+  imageTag: '$(Build.BuildId)'
+  aksCluster: 'aks-poc3-prod'
+  aksResourceGroup: 'rg-poc3-prod'
+  appServiceName: 'app-poc3-prod'
+  appServiceRG: 'rg-poc3-prod'
+
+stages:
+  # ── CI: Build, Test, Scan, Push to ACR ──────────────────────────────────────
+  - stage: CI
+    displayName: Build and Push
+    jobs:
+      - job: BuildPushScan
+        pool:
+          vmImage: ubuntu-latest
+        steps:
+          - task: UseDotNet@2
+            inputs:
+              version: '8.0.x'
+
+          - task: DotNetCoreCLI@2
+            displayName: Build and test
+            inputs:
+              command: test
+              arguments: '--configuration Release --collect:"XPlat Code Coverage"'
+
+          # Build Docker image
+          - task: Docker@2
+            displayName: Build container image
+            inputs:
+              command: build
+              dockerfile: Dockerfile
+              tags: |
+                $(acrName).azurecr.io/$(imageName):$(imageTag)
+                $(acrName).azurecr.io/$(imageName):latest
+
+          # Scan image for vulnerabilities
+          - script: |
+              curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+              trivy image \
+                --exit-code 1 \
+                --severity HIGH,CRITICAL \
+                --ignore-unfixed \
+                $(acrName).azurecr.io/$(imageName):$(imageTag)
+            displayName: Trivy vulnerability scan
+
+          # Push to ACR using Managed Identity (no stored credentials)
+          - task: AzureCLI@2
+            displayName: Push to ACR
+            inputs:
+              azureSubscription: 'MyAzureServiceConnection'
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                az acr login --name $(acrName)
+                docker push $(acrName).azurecr.io/$(imageName):$(imageTag)
+                docker push $(acrName).azurecr.io/$(imageName):latest
+
+  # ── CD: Deploy to App Service Staging Slot ──────────────────────────────────
+  - stage: Deploy_Staging
+    displayName: Deploy to Staging Slot
+    dependsOn: CI
+    jobs:
+      - deployment: DeployStaging
+        environment: staging
+        pool:
+          vmImage: ubuntu-latest
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureWebAppContainer@1
+                  displayName: Deploy to staging slot
+                  inputs:
+                    azureSubscription: 'MyAzureServiceConnection'
+                    appName: $(appServiceName)
+                    slotName: staging
+                    imageName: $(acrName).azurecr.io/$(imageName):$(imageTag)
+
+                # Smoke test staging slot
+                - script: |
+                    sleep 30  # Wait for app to start
+                    STATUS=$(curl -s -o /dev/null -w "%{http_code}" https://$(appServiceName)-staging.azurewebsites.net/health)
+                    if [ "$STATUS" != "200" ]; then
+                      echo "Smoke test failed: HTTP $STATUS"
+                      exit 1
+                    fi
+                    echo "Smoke test passed: HTTP $STATUS"
+                  displayName: Smoke test staging slot
+
+  # ── CD: Canary Traffic Routing ───────────────────────────────────────────────
+  - stage: Canary_10
+    displayName: Canary 10%
+    dependsOn: Deploy_Staging
+    jobs:
+      - job: RouteCanary
+        pool:
+          vmImage: ubuntu-latest
+        steps:
+          - task: AzureCLI@2
+            displayName: Route 10% traffic to staging
+            inputs:
+              azureSubscription: 'MyAzureServiceConnection'
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                az webapp traffic-routing set \
+                  --name $(appServiceName) \
+                  --resource-group $(appServiceRG) \
+                  --distribution staging=10
+                echo "Canary at 10% — monitoring for 15 minutes"
+                sleep 900  # 15 minutes
+
+          # Check error rate in Application Insights
+          - task: AzureCLI@2
+            displayName: Validate error rate
+            inputs:
+              azureSubscription: 'MyAzureServiceConnection'
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                ERROR_RATE=$(az monitor metrics list \
+                  --resource $(appInsightsId) \
+                  --metric "requests/failed" \
+                  --interval PT15M \
+                  --query "value[0].timeseries[0].data[-1].average" -o tsv)
+                echo "Error rate: $ERROR_RATE"
+                if (( $(echo "$ERROR_RATE > 1.0" | bc -l) )); then
+                  echo "Error rate exceeds 1% threshold — triggering rollback"
+                  az webapp traffic-routing clear --name $(appServiceName) --resource-group $(appServiceRG)
+                  exit 1
+                fi
+
+  # ── CD: Full Swap to Production ──────────────────────────────────────────────
+  - stage: Swap_Production
+    displayName: Swap to Production
+    dependsOn: Canary_10
+    jobs:
+      - deployment: SwapProd
+        environment: production  # Requires manual approval
+        pool:
+          vmImage: ubuntu-latest
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureAppServiceManage@0
+                  displayName: Swap staging to production
+                  inputs:
+                    azureSubscription: 'MyAzureServiceConnection'
+                    Action: 'Swap Slots'
+                    WebAppName: $(appServiceName)
+                    ResourceGroupName: $(appServiceRG)
+                    SourceSlot: staging
+
+  # ── CD: Deploy to AKS via Helm ───────────────────────────────────────────────
+  - stage: Deploy_AKS
+    displayName: Deploy to AKS
+    dependsOn: CI
+    jobs:
+      - deployment: DeployAKS
+        environment: aks-production
+        pool:
+          vmImage: ubuntu-latest
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureCLI@2
+                  displayName: Deploy to AKS via Helm
+                  inputs:
+                    azureSubscription: 'MyAzureServiceConnection'
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: |
+                      az aks get-credentials \
+                        --name $(aksCluster) \
+                        --resource-group $(aksResourceGroup)
+
+                      helm upgrade --install myapp ./helm/myapp \
+                        --namespace production \
+                        --create-namespace \
+                        --set image.repository=$(acrName).azurecr.io/$(imageName) \
+                        --set image.tag=$(imageTag) \
+                        --wait \
+                        --timeout 5m
+
+                      kubectl rollout status deployment/myapp -n production

@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Day 8 — Canary, A/B Testing + CI/CD Complete</title>
+<link rel="stylesheet" href="assets/style.css"/></head>
+<body>
+<nav class="sidebar"><div class="sidebar-header"><div class="logo">⚡ Azure Training</div><div class="subtitle">Apr 7–30, 2026</div></div><ul class="nav-list"><li><a href="index.html" class="nav-link">🏠 Overview</a></li><li class="nav-section">Week 1</li><li><a href="day-01.html" class="nav-link">Day 1 — App Service + Terraform</a></li><li><a href="day-02.html" class="nav-link">Day 2 — SQL + Containers</a></li><li><a href="day-03.html" class="nav-link">Day 3 — Auth + APIM</a></li><li class="nav-section">Week 2</li><li><a href="day-04.html" class="nav-link">Day 4 — DevOps + Modules</a></li><li><a href="day-05.html" class="nav-link">Day 5 — CI/CD + AKS</a></li><li><a href="day-06.html" class="nav-link">Day 6 — GitHub Actions</a></li><li class="nav-section">Week 3</li><li><a href="day-07.html" class="nav-link">Day 7 — Release Strategies</a></li><li><a href="day-08.html" class="nav-link active">Day 8 — Canary + A/B Testing</a></li><li><a href="day-09.html" class="nav-link">Day 9 — Security</a></li><li class="nav-section">Week 4</li><li><a href="day-10.html" class="nav-link">Day 10 — Full Pipeline POC</a></li><li><a href="day-11.html" class="nav-link">Day 11 — 3-Tier + GitOps</a></li><li><a href="day-12.html" class="nav-link">Day 12 — Interview Prep</a></li></ul></nav>
+
+<main class="main">
+  <header class="page-header">
+    <h1>Day 8 — Canary, A/B Testing + CI/CD to App Service</h1>
+    <div class="day-meta"><span>📅 April 22, 2026</span><span>👥 Murali &amp; Venkat</span><span>🔬 POC 3 Complete</span></div>
+  </header>
+  <div class="day-nav"><a href="day-07.html" class="prev">← Day 7</a><a href="day-09.html" class="next">Day 9 →</a></div>
+
+  <div class="tabs" data-group="d8">
+    <button class="tab-btn active" data-group="d8" data-tab="theory">📖 Theory</button>
+    <button class="tab-btn" data-group="d8" data-tab="poc">🔬 POC 3 Complete</button>
+    <button class="tab-btn" data-group="d8" data-tab="qa">❓ Interview Q&amp;A</button>
+  </div>
+
+  <!-- THEORY -->
+  <div class="tab-panel active" data-group="d8" data-tab="theory">
+    <div class="info-box blue"><strong>Today's Goal:</strong> Automated rollback with Application Insights alerts, A/B testing setup, dark launching, and completing the full CI/CD pipeline to App Service.</div>
+
+    <section class="section">
+      <h2 class="section-title">Automated Rollback with Application Insights</h2>
+      <div class="code-block"><div class="code-header"><span class="code-lang">hcl</span><button class="copy-btn">Copy</button></div><pre><span class="cm"># Alert that triggers rollback when error rate exceeds threshold</span>
+<span class="kw">resource</span> <span class="str">"azurerm_monitor_metric_alert"</span> <span class="str">"canary_error_rate"</span> {
+  name                = <span class="str">"alert-canary-error-rate"</span>
+  resource_group_name = var.resource_group_name
+  scopes              = [azurerm_application_insights.main.id]
+  severity            = <span class="num">1</span>
+
+  criteria {
+    metric_namespace = <span class="str">"microsoft.insights/components"</span>
+    metric_name      = <span class="str">"requests/failed"</span>
+    aggregation      = <span class="str">"Count"</span>
+    operator         = <span class="str">"GreaterThan"</span>
+    threshold        = <span class="num">10</span>
+  }
+
+  action { action_group_id = azurerm_monitor_action_group.rollback.id }
+  frequency   = <span class="str">"PT1M"</span>
+  window_size = <span class="str">"PT5M"</span>
+}</pre></div>
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">A/B Testing with Application Insights</h2>
+      <div class="code-block"><div class="code-header"><span class="code-lang">kusto</span><button class="copy-btn">Copy</button></div><pre><span class="cm">// KQL: Compare conversion rates between UI variants</span>
+customEvents
+| <span class="kw">where</span> name == <span class="str">"CheckoutCompleted"</span>
+| <span class="kw">extend</span> variant = tostring(customDimensions[<span class="str">"UIVariant"</span>])
+| <span class="kw">summarize</span> conversions = count() <span class="kw">by</span> variant, bin(timestamp, 1h)
+| <span class="kw">render</span> timechart</pre></div>
+      <div class="info-box green"><strong>A/B Test Rules:</strong> Define hypothesis and success metric BEFORE starting. Ensure statistical significance (1–2 weeks of data). Don't stop early because one variant looks better.</div>
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">Dark Launching</h2>
+      <div class="info-box purple"><strong>Dark launching</strong> deploys new code to production but doesn't expose it to users — run the new code path in the background to test with real production data, but return results from the old code path.</div>
+      <div class="code-block"><div class="code-header"><span class="code-lang">csharp</span><button class="copy-btn">Copy</button></div><pre><span class="cm">// Dark launch: run new code but return old result</span>
+<span class="kw">if</span> (await featureManager.IsEnabledAsync(<span class="str">"NewPaymentProcessor"</span>))
+{
+    <span class="cm">// Run new processor in background — don't return its result yet</span>
+    _ = Task.Run(() => newPaymentProcessor.ProcessAsync(order));
+}
+<span class="cm">// Always return result from old processor</span>
+<span class="kw">return</span> await legacyPaymentProcessor.ProcessAsync(order);</pre></div>
+    </section>
+  </div>
+
+  <!-- POC -->
+  <div class="tab-panel" data-group="d8" data-tab="poc">
+    <div class="info-box blue"><strong>POC 3 Complete:</strong> Full pipeline — Build → Trivy scan → Push to ACR → Deploy staging → Canary 10% → Approval → Swap to production.</div>
+    <section class="section">
+      <h2 class="section-title">Validation Checklist</h2>
+      <ul class="checklist">
+        <li>Image pushed to ACR after successful build</li>
+        <li>Trivy scan passes (no HIGH/CRITICAL CVEs)</li>
+        <li>App deployed to staging slot</li>
+        <li>Smoke test returns HTTP 200 on staging</li>
+        <li>Canary traffic split: 10% to staging (verify with traffic-routing show)</li>
+        <li>Application Insights alert configured for rollback</li>
+        <li>Production swap requires manual approval</li>
+        <li>After swap: production returns HTTP 200</li>
+      </ul>
+      <div class="code-block"><div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div><pre><span class="cm"># Verify image in ACR</span>
+az acr repository show-tags --name myacrprod --repository myapp --query <span class="str">"[-1]"</span> -o tsv
+
+<span class="cm"># Verify canary traffic routing</span>
+az webapp traffic-routing show --name app-poc3-prod --resource-group rg-poc3
+
+<span class="cm"># Verify production after swap</span>
+curl -s https://app-poc3-prod.azurewebsites.net/health</pre></div>
+    </section>
+  </div>
+
+  <!-- Q&A -->
+  <div class="tab-panel" data-group="d8" data-tab="qa">
+    <div class="qa-list">
+      <div class="qa-item"><button class="qa-question">What is dark launching and when would you use it?<span class="qa-arrow">▼</span></button><div class="qa-answer"><p>Dark launching deploys new code to production but doesn't expose it to users — you run the new code path in the background to test it with real production data and load, but return results from the old code path. Use it when: you want to validate performance/correctness of new code with real data before exposing it, or when you're replacing a critical system and need confidence before switching.</p></div></div>
+      <div class="qa-item"><button class="qa-question">How do you measure the success of an A/B test?<span class="qa-arrow">▼</span></button><div class="qa-answer"><p>Define the hypothesis and success metric before starting (e.g., "New checkout UI will increase conversion rate by 5%"). Track custom events in Application Insights. Use KQL to compare conversion rates between variants. Ensure statistical significance (enough sample size, typically 1–2 weeks of data). Only declare a winner when the difference is statistically significant — don't stop early because one variant looks better.</p></div></div>
+      <div class="qa-item"><button class="qa-question">What happens to in-flight requests during a slot swap?<span class="qa-arrow">▼</span></button><div class="qa-answer"><p>App Service drains in-flight requests before completing the swap. Requests that started on the old slot complete on the old slot. New requests after the swap go to the new slot. The swap is atomic from the user's perspective — there's no period where some requests go to old and some to new. This is why blue-green with slots is truly zero-downtime.</p></div></div>
+      <div class="qa-item"><button class="qa-question">How do you implement a rollback pipeline triggered by an Application Insights alert?<span class="qa-arrow">▼</span></button><div class="qa-answer"><p>1) Create an Application Insights metric alert (e.g., error rate &gt; 1%). 2) Create an Action Group that calls an Azure Function or webhook. 3) The Function calls the Azure DevOps REST API to trigger a rollback pipeline. 4) The rollback pipeline runs <code>az webapp traffic-routing clear</code> (for canary) or <code>az webapp deployment slot swap</code> (for blue-green). The whole chain should complete in &lt; 2 minutes.</p></div></div>
+    </div>
+  </div>
+</main>
+
+<script>
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const g = btn.dataset.group, t = btn.dataset.tab;
+    document.querySelectorAll(`.tab-btn[data-group="${g}"]`).forEach(b => b.classList.remove('active'));
+    document.querySelectorAll(`.tab-panel[data-group="${g}"]`).forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelector(`.tab-panel[data-group="${g}"][data-tab="${t}"]`).classList.add('active');
+  });
+});
+document.querySelectorAll('.qa-question').forEach(btn => {
+  btn.addEventListener('click', () => { btn.classList.toggle('open'); btn.nextElementSibling.classList.toggle('open'); });
+});
+document.querySelectorAll('.copy-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const code = btn.closest('.code-block').querySelector('pre').innerText;
+    navigator.clipboard.writeText(code).then(() => {
+      btn.textContent = 'Copied!'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+    });
+  });
+});
+</script>
+</body>
+</html>

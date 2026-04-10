@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Day 4 — DevOps Fundamentals + Terraform Modules</title>
+<link rel="stylesheet" href="assets/style.css"/></head>
+<body>
+<nav class="sidebar"><div class="sidebar-header"><div class="logo">⚡ Azure Training</div><div class="subtitle">Apr 7–30, 2026</div></div><ul class="nav-list"><li><a href="index.html" class="nav-link">🏠 Overview</a></li><li class="nav-section">Week 1</li><li><a href="day-01.html" class="nav-link">Day 1 — App Service + Terraform</a></li><li><a href="day-02.html" class="nav-link">Day 2 — SQL + Containers</a></li><li><a href="day-03.html" class="nav-link">Day 3 — Auth + APIM</a></li><li class="nav-section">Week 2</li><li><a href="day-04.html" class="nav-link active">Day 4 — DevOps + Modules</a></li><li><a href="day-05.html" class="nav-link">Day 5 — CI/CD + AKS</a></li><li><a href="day-06.html" class="nav-link">Day 6 — GitHub Actions</a></li><li class="nav-section">Week 3</li><li><a href="day-07.html" class="nav-link">Day 7 — Release Strategies</a></li><li><a href="day-08.html" class="nav-link">Day 8 — Canary + A/B Testing</a></li><li><a href="day-09.html" class="nav-link">Day 9 — Security</a></li><li class="nav-section">Week 4</li><li><a href="day-10.html" class="nav-link">Day 10 — Full Pipeline POC</a></li><li><a href="day-11.html" class="nav-link">Day 11 — 3-Tier + GitOps</a></li><li><a href="day-12.html" class="nav-link">Day 12 — Interview Prep</a></li></ul></nav>
+<main class="main">
+  <header class="page-header">
+    <h1>Day 4 — DevOps Fundamentals + Terraform Modules</h1>
+    <div class="day-meta"><span>📅 April 14, 2026</span><span>👥 Sabari &amp; Shruthi</span><span>🔬 POC 2 Start</span></div>
+  </header>
+  <div class="day-nav"><a href="day-03.html" class="prev">← Day 3</a><a href="day-05.html" class="next">Day 5 →</a></div>
+
+  <div class="tabs" data-group="d4">
+    <button class="tab-btn active" data-group="d4" data-tab="theory">📖 Theory</button>
+    <button class="tab-btn" data-group="d4" data-tab="poc">🔬 POC 2 Start</button>
+    <button class="tab-btn" data-group="d4" data-tab="qa">❓ Interview Q&amp;A</button>
+  </div>
+
+  <div class="tab-panel active" data-group="d4" data-tab="theory">
+    <div class="info-box blue"><strong>Today's Goal:</strong> DORA metrics, Git workflows, branch policies, technical debt management. Terraform multi-environment structure and for_each patterns.</div>
+
+    <section class="section">
+      <h2 class="section-title">DORA Metrics — Must Know for Every Interview</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Metric</th><th>What It Measures</th><th>Elite</th><th>Low</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Deployment Frequency</strong></td><td>How often you deploy to production</td><td>Multiple/day</td><td>&lt; Monthly</td></tr>
+          <tr><td><strong>Lead Time for Changes</strong></td><td>Commit → production</td><td>&lt; 1 hour</td><td>&gt; 1 month</td></tr>
+          <tr><td><strong>Change Failure Rate</strong></td><td>% of deployments causing incidents</td><td>0–5%</td><td>&gt; 15%</td></tr>
+          <tr><td><strong>Time to Restore</strong></td><td>How long to recover from incidents</td><td>&lt; 1 hour</td><td>&gt; 1 week</td></tr>
+        </tbody>
+      </table></div>
+      <div class="info-box green" style="margin-top:16px"><strong>Why they matter:</strong> Research shows elite DORA performers have 2x better business outcomes. These metrics come up in almost every DevOps interview.</div>
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">Git Workflows</h2>
+      <div class="two-col">
+        <div class="card">
+          <div class="card-title">✅ Trunk-Based Development (Recommended)</div>
+          <ul>
+            <li>Everyone commits to <code>main</code> at least daily</li>
+            <li>Feature branches live &lt; 2 days</li>
+            <li>Feature flags hide incomplete features</li>
+            <li>Enables true continuous integration</li>
+          </ul>
+        </div>
+        <div class="card">
+          <div class="card-title">GitFlow (Scheduled Releases)</div>
+          <ul>
+            <li>Long-lived branches (develop, release, hotfix)</li>
+            <li>Suited for quarterly release cycles</li>
+            <li>More merge conflicts</li>
+            <li>Use only for products with scheduled releases</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">Branch Policies in Azure DevOps</h2>
+      <div class="code-block"><div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
+      <pre><span class="cm"># Require 2 reviewers on main</span>
+az repos policy approver-count create \
+  --repository-id &lt;repo-id&gt; \
+  --branch main \
+  --minimum-approver-count <span class="num">2</span> \
+  --creator-vote-counts <span class="kw">false</span> \
+  --reset-on-source-push <span class="kw">true</span> \
+  --project myProject \
+  --org https://dev.azure.com/myOrg
+
+<span class="cm"># Require CI build to pass before merge</span>
+az repos policy build create \
+  --repository-id &lt;repo-id&gt; \
+  --branch main \
+  --build-definition-id &lt;pipeline-id&gt; \
+  --display-name <span class="str">"CI Build Validation"</span> \
+  --project myProject \
+  --org https://dev.azure.com/myOrg</pre></div>
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">Terraform Multi-Environment Structure</h2>
+      <div class="code-block"><div class="code-header"><span class="code-lang">text — Directory Structure</span><button class="copy-btn">Copy</button></div>
+      <pre>infrastructure/
+├── modules/
+│   ├── networking/    <span class="cm"># Reusable VNet + subnets + NSGs</span>
+│   ├── compute/       <span class="cm"># Reusable App Service / VMSS</span>
+│   └── database/      <span class="cm"># Reusable SQL + private endpoint</span>
+└── environments/
+    ├── dev/
+    │   ├── main.tf          <span class="cm"># Calls modules</span>
+    │   └── terraform.tfvars <span class="cm"># dev-specific values</span>
+    ├── staging/
+    └── prod/</pre></div>
+      <div class="info-box orange"><strong>Rule:</strong> Each environment has its own state file. Never use Terraform workspaces for environment isolation — they share the same backend and are harder to manage.</div>
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">for_each with Maps</h2>
+      <div class="code-block"><div class="code-header"><span class="code-lang">hcl</span><button class="copy-btn">Copy</button></div>
+      <pre><span class="cm"># Create resource groups for all environments in one block</span>
+<span class="kw">variable</span> <span class="str">"environments"</span> {
+  type = map(string)
+  default = {
+    dev     = <span class="str">"eastus2"</span>
+    staging = <span class="str">"eastus2"</span>
+    prod    = <span class="str">"westus2"</span>
+  }
+}
+
+<span class="kw">resource</span> <span class="str">"azurerm_resource_group"</span> <span class="str">"envs"</span> {
+  <span class="kw">for_each</span> = <span class="kw">var</span>.environments
+  name     = <span class="str">"rg-myapp-${each.key}"</span>
+  location = each.value
+  tags     = { environment = each.key }
+}
+
+<span class="cm"># Reference: azurerm_resource_group.envs["prod"].name</span></pre></div>
+    </section>
+  </div>
+
+  <div class="tab-panel" data-group="d4" data-tab="poc">
+    <div class="info-box blue"><strong>POC 2 Start:</strong> Set up Azure DevOps project with branch policies + Terraform VMSS infrastructure.</div>
+    <section class="section">
+      <h2 class="section-title">Step 1 — Azure DevOps Setup</h2>
+      <div class="card"><div class="card-title">Configure Branch Policies on main</div>
+        <ol><li>Go to Azure DevOps → Repos → Branches → main → Branch policies</li><li>Enable: Require a minimum number of reviewers (2)</li><li>Enable: Check for linked work items</li><li>Enable: Build validation (select your CI pipeline)</li><li>Enable: Comment requirements (all comments must be resolved)</li></ol>
+      </div>
+    </section>
+    <section class="section">
+      <h2 class="section-title">Step 2 — VMSS with Terraform</h2>
+      <div class="code-block"><div class="code-header"><span class="code-lang">hcl</span><button class="copy-btn">Copy</button></div>
+      <pre><span class="kw">resource</span> <span class="str">"azurerm_linux_virtual_machine_scale_set"</span> <span class="str">"main"</span> {
+  name                = <span class="str">"vmss-poc2-dev"</span>
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+  sku                 = <span class="str">"Standard_D2s_v3"</span>
+  instances           = <span class="num">2</span>
+
+  admin_username                  = <span class="str">"azureuser"</span>
+  disable_password_authentication = <span class="kw">true</span>
+  admin_ssh_key {
+    username   = <span class="str">"azureuser"</span>
+    public_key = file(<span class="str">"~/.ssh/id_rsa.pub"</span>)
+  }
+
+  source_image_reference {
+    publisher = <span class="str">"Canonical"</span>; offer = <span class="str">"0001-com-ubuntu-server-jammy"</span>
+    sku = <span class="str">"22_04-lts-gen2"</span>; version = <span class="str">"latest"</span>
+  }
+
+  os_disk { storage_account_type = <span class="str">"Premium_LRS"</span>; caching = <span class="str">"ReadWrite"</span> }
+
+  network_interface {
+    name = <span class="str">"nic"</span>; primary = <span class="kw">true</span>
+    ip_configuration {
+      name = <span class="str">"internal"</span>; primary = <span class="kw">true</span>
+      subnet_id = module.networking.subnet_ids[<span class="str">"web"</span>]
+    }
+  }
+
+  lifecycle { ignore_changes = [instances] }  <span class="cm"># Let autoscale manage count</span>
+}</pre></div>
+    </section>
+    <section class="section">
+      <h2 class="section-title">✅ Validation Checklist</h2>
+      <ul class="checklist">
+        <li>Branch policy blocks direct push to main</li>
+        <li>PR requires 2 reviewers and CI build to pass</li>
+        <li>VMSS shows 2 healthy instances</li>
+        <li>Autoscale configured (min 2, max 10)</li>
+        <li>Terraform modules used for networking and compute</li>
+      </ul>
+    </section>
+  </div>
+
+  <div class="tab-panel" data-group="d4" data-tab="qa">
+    <div class="qa-list">
+      <div class="qa-item"><button class="qa-question">What are the four DORA metrics? <span class="qa-arrow">▼</span></button><div class="qa-answer"><p>Deployment Frequency (how often you deploy to production), Lead Time for Changes (time from commit to production), Change Failure Rate (% of deployments causing incidents), and Time to Restore Service (how long to recover). Elite teams deploy multiple times per day with &lt; 1 hour lead time, &lt; 5% failure rate, and &lt; 1 hour recovery time.</p></div></div>
+      <div class="qa-item"><button class="qa-question">Compare trunk-based development with GitFlow. <span class="qa-arrow">▼</span></button><div class="qa-answer"><p>Trunk-based: everyone commits to main daily, short-lived branches (&lt; 2 days), feature flags for incomplete work. Enables true CI/CD. GitFlow: long-lived branches (develop, release, hotfix), suited for scheduled releases. Trunk-based is better for teams doing continuous deployment — it eliminates merge conflicts and keeps the codebase always deployable.</p></div></div>
+      <div class="qa-item"><button class="qa-question">How do you structure Terraform for multiple environments? <span class="qa-arrow">▼</span></button><div class="qa-answer"><p>Separate directories per environment (<code>environments/dev/</code>, <code>environments/prod/</code>) each with their own state file. Shared logic goes in <code>modules/</code>. Each environment calls the same modules with different variable values. This gives complete isolation — a mistake in dev can't affect prod state. Never use Terraform workspaces for environment isolation.</p></div></div>
+      <div class="qa-item"><button class="qa-question">What is a blameless post-mortem? <span class="qa-arrow">▼</span></button><div class="qa-answer"><p>A post-incident review that focuses on systemic causes rather than blaming individuals. The goal is to identify what failed in the process or system and how to prevent recurrence. Psychological safety is essential — people must feel safe reporting mistakes. Output: timeline of events, root cause analysis, action items with owners and due dates.</p></div></div>
+      <div class="qa-item"><button class="qa-question">How do you manage technical debt without stopping feature development? <span class="qa-arrow">▼</span></button><div class="qa-answer"><p>Allocate 20% of each sprint to debt reduction (the "20% rule"). Track debt as work items in Azure Boards with a <code>TechDebt</code> tag. Use SonarCloud to quantify debt objectively. Set a quality gate: no new issues can be introduced in any PR. This way debt doesn't grow while you gradually reduce existing debt.</p></div></div>
+    </div>
+  </div>
+</main>
+<script src="assets/app.js"></script>
+</body></html>

@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Day 2 — Azure SQL + Containers</title>
+  <link rel="stylesheet" href="assets/style.css" />
+</head>
+<body>
+  <nav class="sidebar">
+    <div class="sidebar-header"><div class="logo">⚡ Azure Training</div><div class="subtitle">Apr 7–30, 2026</div></div>
+    <ul class="nav-list">
+      <li><a href="index.html" class="nav-link">🏠 Overview</a></li>
+      <li class="nav-section">Week 1</li>
+      <li><a href="day-01.html" class="nav-link">Day 1 — App Service + Terraform</a></li>
+      <li><a href="day-02.html" class="nav-link active">Day 2 — SQL + Containers</a></li>
+      <li><a href="day-03.html" class="nav-link">Day 3 — Auth + APIM</a></li>
+      <li class="nav-section">Week 2</li>
+      <li><a href="day-04.html" class="nav-link">Day 4 — DevOps + Modules</a></li>
+      <li><a href="day-05.html" class="nav-link">Day 5 — CI/CD + AKS</a></li>
+      <li><a href="day-06.html" class="nav-link">Day 6 — GitHub Actions</a></li>
+      <li class="nav-section">Week 3</li>
+      <li><a href="day-07.html" class="nav-link">Day 7 — Release Strategies</a></li>
+      <li><a href="day-08.html" class="nav-link">Day 8 — Canary + A/B Testing</a></li>
+      <li><a href="day-09.html" class="nav-link">Day 9 — Security</a></li>
+      <li class="nav-section">Week 4</li>
+      <li><a href="day-10.html" class="nav-link">Day 10 — Full Pipeline POC</a></li>
+      <li><a href="day-11.html" class="nav-link">Day 11 — 3-Tier + GitOps</a></li>
+      <li><a href="day-12.html" class="nav-link">Day 12 — Interview Prep</a></li>
+    </ul>
+  </nav>
+  <main class="main">
+    <header class="page-header">
+      <h1>Day 2 — Azure SQL + Containers</h1>
+      <div class="day-meta">
+        <span>📅 April 8, 2026</span><span>👥 Lini &amp; Karthik</span><span>🔬 POC 1 Complete</span>
+      </div>
+    </header>
+    <div class="day-nav">
+      <a href="day-01.html" class="prev">← Day 1</a>
+      <a href="day-03.html" class="next">Day 3 →</a>
+    </div>
+
+    <div class="tabs" data-group="d2">
+      <button class="tab-btn active" data-group="d2" data-tab="theory">📖 Theory</button>
+      <button class="tab-btn" data-group="d2" data-tab="poc">🔬 POC</button>
+      <button class="tab-btn" data-group="d2" data-tab="qa">❓ Interview Q&amp;A</button>
+    </div>
+
+    <!-- THEORY -->
+    <div class="tab-panel active" data-group="d2" data-tab="theory">
+      <div class="info-box blue"><strong>Today's Goal:</strong> Azure SQL security controls (TDE, DDM, Always Encrypted), container services (ACR, ACI, Container Apps), and Terraform lifecycle rules.</div>
+
+      <section class="section">
+        <h2 class="section-title">Azure SQL — Security Controls</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Feature</th><th>What It Does</th><th>When to Use</th></tr></thead>
+            <tbody>
+              <tr><td><strong>TDE</strong></td><td>Encrypts data at rest (storage level)</td><td>Always — enabled by default</td></tr>
+              <tr><td><strong>Dynamic Data Masking</strong></td><td>Non-admins see <code>XXXX</code> instead of real data</td><td>PII columns (email, phone, SSN)</td></tr>
+              <tr><td><strong>Always Encrypted</strong></td><td>Client-side encryption — DB never sees plaintext</td><td>Most sensitive columns (SSN, credit card)</td></tr>
+              <tr><td><strong>Private Endpoint</strong></td><td>No public internet access</td><td>All production databases</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="info-box orange" style="margin-top:16px"><strong>Key Difference:</strong> TDE = Azure encrypts storage. Always Encrypted = your app encrypts before sending to Azure. DBAs can see TDE data; they cannot see Always Encrypted data.</div>
+      </section>
+
+      <section class="section">
+        <h2 class="section-title">Create SQL with Security Controls</h2>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
+          <pre><span class="cm"># Create SQL Server (no public access)</span>
+az sql server create \
+  --name sql-training-dev \
+  --resource-group rg-training-dev \
+  --location eastus2 \
+  --admin-user sqladmin \
+  --admin-password <span class="str">"P@ssw0rd123!"</span> \
+  --enable-public-network <span class="kw">false</span>
+
+<span class="cm"># Create database (General Purpose, 2 vCores)</span>
+az sql db create \
+  --name sqldb-training \
+  --server sql-training-dev \
+  --resource-group rg-training-dev \
+  --service-objective GP_Gen5_2
+
+<span class="cm"># Dynamic Data Masking on email column</span>
+az sql db data-masking rule create \
+  --resource-group rg-training-dev \
+  --server sql-training-dev \
+  --database sqldb-training \
+  --schema-name dbo \
+  --table-name Customers \
+  --column-name Email \
+  --masking-function Email
+
+<span class="cm"># Failover group (geo-replication + auto-failover)</span>
+az sql failover-group create \
+  --name fog-training \
+  --server sql-training-dev \
+  --resource-group rg-training-dev \
+  --partner-server sql-training-secondary \
+  --failover-policy Automatic \
+  --grace-period <span class="num">1</span></pre>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2 class="section-title">Container Services — Decision Matrix</h2>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Requirement</th><th>ACI</th><th>Container Apps</th><th>AKS</th></tr></thead>
+            <tbody>
+              <tr><td>One-off batch job</td><td>✅ Best</td><td>✅</td><td>❌ Overkill</td></tr>
+              <tr><td>Microservices</td><td>❌</td><td>✅ Best</td><td>✅</td></tr>
+              <tr><td>Scale to zero</td><td>❌</td><td>✅</td><td>With KEDA</td></tr>
+              <tr><td>Full Kubernetes control</td><td>❌</td><td>❌</td><td>✅</td></tr>
+              <tr><td>Dapr built-in</td><td>❌</td><td>✅</td><td>Manual</td></tr>
+              <tr><td>Operational complexity</td><td>Low</td><td>Low–Med</td><td>High</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="info-box green" style="margin-top:16px"><strong>Rule:</strong> ACI for jobs → Container Apps for microservices → AKS when you need full Kubernetes.</div>
+      </section>
+
+      <section class="section">
+        <h2 class="section-title">Azure Container Apps</h2>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
+          <pre><span class="cm"># Create Container Apps environment</span>
+az containerapp env create \
+  --name cae-training-dev \
+  --resource-group rg-training-dev \
+  --location eastus2
+
+<span class="cm"># Deploy with scale-to-zero</span>
+az containerapp create \
+  --name myapp \
+  --resource-group rg-training-dev \
+  --environment cae-training-dev \
+  --image acrtrainingdev.azurecr.io/myapp:v1 \
+  --registry-identity system \
+  --min-replicas <span class="num">0</span> \
+  --max-replicas <span class="num">10</span> \
+  --scale-rule-name http-rule \
+  --scale-rule-type http \
+  --scale-rule-http-concurrency <span class="num">50</span>
+
+<span class="cm"># Traffic splitting: 80% stable, 20% canary</span>
+az containerapp ingress traffic set \
+  --name myapp \
+  --resource-group rg-training-dev \
+  --revision-weight stable=<span class="num">80</span> canary=<span class="num">20</span></pre>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2 class="section-title">Terraform Lifecycle Rules</h2>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">hcl</span><button class="copy-btn">Copy</button></div>
+          <pre><span class="kw">resource</span> <span class="str">"azurerm_mssql_server"</span> <span class="str">"main"</span> {
+  name = <span class="str">"sql-training-prod"</span>
+  <span class="cm"># ...</span>
+
+  lifecycle {
+    prevent_destroy = <span class="kw">true</span>  <span class="cm"># Block accidental terraform destroy</span>
+
+    ignore_changes = [
+      administrator_login_password  <span class="cm"># Don't reset password on every apply</span>
+    ]
+  }
+}
+
+<span class="kw">resource</span> <span class="str">"azurerm_kubernetes_cluster"</span> <span class="str">"main"</span> {
+  <span class="cm"># ...</span>
+  lifecycle {
+    create_before_destroy = <span class="kw">true</span>  <span class="cm"># Zero-downtime replacement</span>
+    ignore_changes = [
+      default_node_pool[<span class="num">0</span>].node_count  <span class="cm"># Managed by autoscaler</span>
+    ]
+  }
+}</pre>
+        </div>
+      </section>
+    </div>
+
+    <!-- POC -->
+    <div class="tab-panel" data-group="d2" data-tab="poc">
+      <div class="info-box blue"><strong>POC 1 Complete:</strong> Add Azure SQL with private endpoint to the infrastructure from Day 1.</div>
+
+      <section class="section">
+        <h2 class="section-title">Add SQL to Terraform</h2>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">hcl</span><button class="copy-btn">Copy</button></div>
+          <pre><span class="kw">resource</span> <span class="str">"azurerm_mssql_server"</span> <span class="str">"main"</span> {
+  name                          = <span class="str">"sql-poc1-dev"</span>
+  resource_group_name           = azurerm_resource_group.main.name
+  location                      = azurerm_resource_group.main.location
+  version                       = <span class="str">"12.0"</span>
+  administrator_login           = <span class="str">"sqladmin"</span>
+  administrator_login_password  = <span class="kw">var</span>.sql_password
+  public_network_access_enabled = <span class="kw">false</span>
+  minimum_tls_version           = <span class="str">"1.2"</span>
+  lifecycle { prevent_destroy = <span class="kw">true</span> }
+}
+
+<span class="kw">resource</span> <span class="str">"azurerm_mssql_database"</span> <span class="str">"main"</span> {
+  name      = <span class="str">"sqldb-poc1"</span>
+  server_id = azurerm_mssql_server.main.id
+  sku_name  = <span class="str">"GP_Gen5_2"</span>
+}
+
+<span class="kw">resource</span> <span class="str">"azurerm_private_endpoint"</span> <span class="str">"sql"</span> {
+  name                = <span class="str">"pe-sql-poc1"</span>
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+  subnet_id           = azurerm_subnet.data.id
+
+  private_service_connection {
+    name                           = <span class="str">"sql-connection"</span>
+    private_connection_resource_id = azurerm_mssql_server.main.id
+    subresource_names              = [<span class="str">"sqlServer"</span>]
+    is_manual_connection           = <span class="kw">false</span>
+  }
+}</pre>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2 class="section-title">Validate</h2>
+        <div class="code-block">
+          <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
+          <pre><span class="cm"># SQL public access disabled</span>
+az sql server show --name sql-poc1-dev --resource-group rg-poc1-dev \
+  --query publicNetworkAccess -o tsv
+<span class="cm"># Expected: Disabled</span>
+
+<span class="cm"># TDE enabled (default on Azure SQL)</span>
+az sql db tde show --database sqldb-poc1 --server sql-poc1-dev \
+  --resource-group rg-poc1-dev --query status -o tsv
+<span class="cm"># Expected: Enabled</span>
+
+<span class="cm"># Private endpoint provisioned</span>
+az network private-endpoint show --name pe-sql-poc1 \
+  --resource-group rg-poc1-dev --query provisioningState -o tsv
+<span class="cm"># Expected: Succeeded</span></pre>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2 class="section-title">✅ Validation Checklist</h2>
+        <ul class="checklist">
+          <li>SQL public access disabled</li>
+          <li>TDE enabled (verify with az sql db tde show)</li>
+          <li>Dynamic Data Masking rules applied on email/phone columns</li>
+          <li>Private endpoint provisioned in data subnet</li>
+          <li>App Service connects to SQL via private endpoint</li>
+        </ul>
+      </section>
+    </div>
+
+    <!-- Q&A -->
+    <div class="tab-panel" data-group="d2" data-tab="qa">
+      <div class="qa-list">
+        <div class="qa-item">
+          <button class="qa-question">What is the difference between TDE and Always Encrypted? <span class="qa-arrow">▼</span></button>
+          <div class="qa-answer"><p>TDE encrypts data at rest at the storage level — Azure handles it transparently, the database engine sees plaintext. Always Encrypted encrypts client-side — the database engine never sees plaintext, only the application with the column master key can decrypt. Use TDE for general compliance (always on by default). Use Always Encrypted for the most sensitive columns where even DBAs shouldn't see the data (SSN, credit card numbers).</p></div>
+        </div>
+        <div class="qa-item">
+          <button class="qa-question">What is Dynamic Data Masking and what are its limitations? <span class="qa-arrow">▼</span></button>
+          <div class="qa-answer"><p>DDM shows masked data (e.g., <code>XXXX@XXXX.com</code>) to non-privileged users without changing the actual stored data. Limitation: it's a presentation-layer control — privileged users (db_owner, sysadmin) always see real data. It doesn't protect against SQL injection or direct database access. For true protection of sensitive data, use Always Encrypted.</p></div>
+        </div>
+        <div class="qa-item">
+          <button class="qa-question">When would you choose Container Apps over AKS? <span class="qa-arrow">▼</span></button>
+          <div class="qa-answer"><p>Container Apps for most microservices — it removes 80% of Kubernetes operational overhead while providing auto-scale (including scale-to-zero), built-in ingress, Dapr integration, and traffic splitting. Choose AKS when you need: full Kubernetes control (custom operators, CRDs), GPU nodes, specific node configurations, or your team already has deep Kubernetes expertise. For new projects, start with Container Apps and migrate to AKS only if you hit its limits.</p></div>
+        </div>
+        <div class="qa-item">
+          <button class="qa-question">What is <code>prevent_destroy</code> in Terraform and when do you use it? <span class="qa-arrow">▼</span></button>
+          <div class="qa-answer"><p>A lifecycle rule that causes <code>terraform destroy</code> and any plan that would destroy the resource to fail with an error. Use it on critical resources that should never be accidentally deleted: production databases, Key Vaults, storage accounts with important data. It's a safety net — you have to explicitly remove the <code>prevent_destroy</code> block before you can destroy the resource.</p></div>
+        </div>
+        <div class="qa-item">
+          <button class="qa-question">What is a failover group in Azure SQL and how does it differ from active geo-replication? <span class="qa-arrow">▼</span></button>
+          <div class="qa-answer"><p>Active geo-replication creates readable secondary replicas in up to 4 regions — you manage failover manually. A failover group wraps geo-replication with an automatic failover policy and provides a single read-write listener endpoint that automatically redirects to the new primary after failover. Failover groups are preferred for production because the connection string doesn't change after failover.</p></div>
+        </div>
+      </div>
+    </div>
+  </main>
+  <script src="assets/app.js"></script>
+</body>
+</html>

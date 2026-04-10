@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Day 7 — Release Strategies + AKS with Terraform</title>
+<link rel="stylesheet" href="assets/style.css"/></head>
+<body>
+<nav class="sidebar"><div class="sidebar-header"><div class="logo">⚡ Azure Training</div><div class="subtitle">Apr 7–30, 2026</div></div><ul class="nav-list"><li><a href="index.html" class="nav-link">🏠 Overview</a></li><li class="nav-section">Week 1</li><li><a href="day-01.html" class="nav-link">Day 1 — App Service + Terraform</a></li><li><a href="day-02.html" class="nav-link">Day 2 — SQL + Containers</a></li><li><a href="day-03.html" class="nav-link">Day 3 — Auth + APIM</a></li><li class="nav-section">Week 2</li><li><a href="day-04.html" class="nav-link">Day 4 — DevOps + Modules</a></li><li><a href="day-05.html" class="nav-link">Day 5 — CI/CD + AKS</a></li><li><a href="day-06.html" class="nav-link">Day 6 — GitHub Actions</a></li><li class="nav-section">Week 3</li><li><a href="day-07.html" class="nav-link active">Day 7 — Release Strategies</a></li><li><a href="day-08.html" class="nav-link">Day 8 — Canary + A/B Testing</a></li><li><a href="day-09.html" class="nav-link">Day 9 — Security</a></li><li class="nav-section">Week 4</li><li><a href="day-10.html" class="nav-link">Day 10 — Full Pipeline POC</a></li><li><a href="day-11.html" class="nav-link">Day 11 — 3-Tier + GitOps</a></li><li><a href="day-12.html" class="nav-link">Day 12 — Interview Prep</a></li></ul></nav>
+
+<main class="main">
+  <header class="page-header">
+    <h1>Day 7 — Release Strategies + AKS with Terraform</h1>
+    <div class="day-meta"><span>📅 April 21, 2026</span><span>👥 Vijay &amp; Manju</span><span>🔬 POC 3 Start</span></div>
+  </header>
+  <div class="day-nav"><a href="day-06.html" class="prev">← Day 6</a><a href="day-08.html" class="next">Day 8 →</a></div>
+
+  <div class="tabs" data-group="d7">
+    <button class="tab-btn active" data-group="d7" data-tab="theory">📖 Theory</button>
+    <button class="tab-btn" data-group="d7" data-tab="poc">🔬 POC 3 Start</button>
+    <button class="tab-btn" data-group="d7" data-tab="qa">❓ Interview Q&amp;A</button>
+  </div>
+
+  <!-- THEORY -->
+  <div class="tab-panel active" data-group="d7" data-tab="theory">
+    <div class="info-box blue"><strong>Today's Goal:</strong> Blue-green, canary, feature flags, and deployment rings. AKS provisioning with Application Gateway (WAF) using Terraform.</div>
+
+    <section class="section">
+      <h2 class="section-title">Deployment Strategy Comparison</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Strategy</th><th>Traffic Switch</th><th>Rollback Speed</th><th>Best For</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Blue-Green</strong></td><td>Atomic (100% at once)</td><td>Instant (swap back)</td><td>Zero-downtime, simple rollback</td></tr>
+          <tr><td><strong>Canary</strong></td><td>Gradual (5%→25%→100%)</td><td>Fast (clear routing)</td><td>Validate with real traffic</td></tr>
+          <tr><td><strong>A/B Testing</strong></td><td>By user segment</td><td>Fast (disable flag)</td><td>Measure business metrics</td></tr>
+          <tr><td><strong>Feature Flags</strong></td><td>Instant (no deploy)</td><td>Instant (disable flag)</td><td>Decouple release from deploy</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">Blue-Green with App Service Slots</h2>
+      <div class="code-block"><div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div><pre><span class="cm"># Deploy new version to staging slot (green)</span>
+az webapp deployment source config-zip \
+  --name myapp --resource-group myRG \
+  --slot staging --src app-v2.zip
+
+<span class="cm"># Smoke test staging before swap</span>
+curl -f https://myapp-staging.azurewebsites.net/health
+
+<span class="cm"># Swap: staging (green) becomes production</span>
+az webapp deployment slot swap \
+  --name myapp --resource-group myRG \
+  --slot staging --target-slot production
+
+<span class="cm"># Rollback: swap back (takes &lt; 30 seconds)</span>
+az webapp deployment slot swap \
+  --name myapp --resource-group myRG \
+  --slot production --target-slot staging</pre></div>
+      <div class="info-box orange"><strong>Database migrations:</strong> Use the <strong>expand-contract pattern</strong> — add nullable column → deploy new code → add NOT NULL constraint. Never add a NOT NULL column without a default in a single deployment.</div>
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">Canary Deployment</h2>
+      <div class="code-block"><div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div><pre><span class="cm"># Route 10% to staging (canary)</span>
+az webapp traffic-routing set \
+  --name myapp --resource-group myRG \
+  --distribution staging=10
+
+<span class="cm"># After 15 minutes — increase to 50%</span>
+az webapp traffic-routing set \
+  --name myapp --resource-group myRG \
+  --distribution staging=50
+
+<span class="cm"># Full rollout: swap to production</span>
+az webapp deployment slot swap \
+  --name myapp --resource-group myRG \
+  --slot staging --target-slot production
+
+<span class="cm"># Rollback: clear routing (100% back to production)</span>
+az webapp traffic-routing clear \
+  --name myapp --resource-group myRG</pre></div>
+      <div class="info-box green"><strong>Rollback triggers (define BEFORE deployment):</strong> Error rate &gt; 1% (baseline 0.1%) · p95 latency &gt; 2000ms · HTTP 5xx rate &gt; 0.5%</div>
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">Feature Flags with Azure App Configuration</h2>
+      <div class="code-block"><div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div><pre><span class="cm"># Create feature flag</span>
+az appconfig feature set \
+  --name appconfig-training \
+  --feature NewCheckoutFlow --yes
+
+<span class="cm"># Enable for 10% of users</span>
+az appconfig feature filter add \
+  --name appconfig-training \
+  --feature NewCheckoutFlow \
+  --filter-name Microsoft.Targeting \
+  --filter-parameters <span class="str">'{"Audience":{"DefaultRolloutPercentage":10}}'</span></pre></div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Ring</th><th>Audience</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td>Ring 0</td><td>Internal team</td><td>Catch obvious bugs</td></tr>
+          <tr><td>Ring 1</td><td>Early adopters (1%)</td><td>Real user validation</td></tr>
+          <tr><td>Ring 2</td><td>Broad users (10%)</td><td>Scale validation</td></tr>
+          <tr><td>Ring 3</td><td>All users (100%)</td><td>Full rollout</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+  </div>
+
+  <!-- POC -->
+  <div class="tab-panel" data-group="d7" data-tab="poc">
+    <div class="info-box blue"><strong>POC 3:</strong> Full CI/CD pipeline deploying to App Service with deployment slots and canary traffic routing.</div>
+    <section class="section">
+      <h2 class="section-title">Pipeline with Canary Stages</h2>
+      <div class="code-block"><div class="code-header"><span class="code-lang">yaml</span><button class="copy-btn">Copy</button></div><pre><span class="kw">stages:</span>
+  - <span class="kw">stage:</span> Build
+    <span class="kw">jobs:</span>
+      - <span class="kw">job:</span> Build
+        <span class="kw">steps:</span>
+          - script: docker build -t $(ACR).azurecr.io/myapp:$(Build.BuildId) .
+          - script: trivy image --exit-code 1 --severity HIGH,CRITICAL $(ACR).azurecr.io/myapp:$(Build.BuildId)
+          - <span class="kw">task:</span> AzureCLI@2
+            <span class="kw">inputs:</span>
+              <span class="kw">inlineScript:</span> |
+                az acr login --name $(ACR)
+                docker push $(ACR).azurecr.io/myapp:$(Build.BuildId)
+
+  - <span class="kw">stage:</span> Deploy_Staging
+    <span class="kw">dependsOn:</span> Build
+    <span class="kw">jobs:</span>
+      - <span class="kw">deployment:</span> DeployStaging
+        <span class="kw">environment:</span> staging
+        <span class="kw">strategy:</span>
+          <span class="kw">runOnce:</span>
+            <span class="kw">deploy:</span>
+              <span class="kw">steps:</span>
+                - <span class="kw">task:</span> AzureWebAppContainer@1
+                  <span class="kw">inputs:</span>
+                    <span class="kw">appName:</span> app-poc3-prod
+                    <span class="kw">slotName:</span> staging
+                    <span class="kw">imageName:</span> $(ACR).azurecr.io/myapp:$(Build.BuildId)
+
+  - <span class="kw">stage:</span> Canary_10
+    <span class="kw">dependsOn:</span> Deploy_Staging
+    <span class="kw">jobs:</span>
+      - <span class="kw">job:</span> RouteCanary
+        <span class="kw">steps:</span>
+          - <span class="kw">task:</span> AzureCLI@2
+            <span class="kw">inputs:</span>
+              <span class="kw">inlineScript:</span> |
+                az webapp traffic-routing set \
+                  --name app-poc3-prod --resource-group rg-poc3 \
+                  --distribution staging=10
+                sleep 900  <span class="cm"># Monitor 15 minutes</span>
+
+  - <span class="kw">stage:</span> Swap_Production
+    <span class="kw">dependsOn:</span> Canary_10
+    <span class="kw">jobs:</span>
+      - <span class="kw">deployment:</span> SwapProd
+        <span class="kw">environment:</span> production   <span class="cm"># Requires approval</span>
+        <span class="kw">strategy:</span>
+          <span class="kw">runOnce:</span>
+            <span class="kw">deploy:</span>
+              <span class="kw">steps:</span>
+                - <span class="kw">task:</span> AzureAppServiceManage@0
+                  <span class="kw">inputs:</span>
+                    <span class="kw">Action:</span> <span class="str">'Swap Slots'</span>
+                    <span class="kw">WebAppName:</span> app-poc3-prod
+                    <span class="kw">SourceSlot:</span> staging</pre></div>
+    </section>
+  </div>
+
+  <!-- Q&A -->
+  <div class="tab-panel" data-group="d7" data-tab="qa">
+    <div class="qa-list">
+      <div class="qa-item"><button class="qa-question">When would you choose blue-green over canary deployment?<span class="qa-arrow">▼</span></button><div class="qa-answer"><p>Blue-green for: atomic switchover needed, database migrations that aren't backward compatible, or when you need the simplest rollback (just swap back). Canary for: validating with real production traffic before full rollout, measuring business metrics (conversion rate), or when you can tolerate a small % of users experiencing issues. For most feature releases, canary is safer. For infrastructure upgrades, blue-green is cleaner.</p></div></div>
+      <div class="qa-item"><button class="qa-question">How do you handle database migrations in a zero-downtime deployment?<span class="qa-arrow">▼</span></button><div class="qa-answer"><p>Use the <strong>expand-contract pattern</strong>: Phase 1 (Expand) — add new column as nullable, both old and new code work. Phase 2 (Deploy) — deploy new code that writes to the new column. Phase 3 (Contract) — add NOT NULL constraint, remove old code paths. This takes 3 deployments but ensures zero downtime and safe rollback at each step.</p></div></div>
+      <div class="qa-item"><button class="qa-question">What metrics should trigger an automated canary rollback?<span class="qa-arrow">▼</span></button><div class="qa-answer"><p>Define thresholds before deployment: error rate (HTTP 5xx), p95/p99 latency, business metrics (conversion rate, order completion). Example: rollback if error rate &gt; 1% (baseline 0.1%) or p95 latency &gt; 2x baseline for 5 consecutive minutes. Automate with Application Insights alerts → Azure DevOps pipeline trigger.</p></div></div>
+      <div class="qa-item"><button class="qa-question">What is a feature flag kill switch?<span class="qa-arrow">▼</span></button><div class="qa-answer"><p>A feature flag that can be disabled instantly (without redeployment) to turn off a problematic feature for all users. Essential for risky features — if something goes wrong in production, you disable the flag and the feature is gone within seconds. Azure App Configuration propagates flag changes within 30 seconds.</p></div></div>
+      <div class="qa-item"><button class="qa-question">What is the difference between a deployment ring and canary?<span class="qa-arrow">▼</span></button><div class="qa-answer"><p>Canary routes a random percentage of traffic to the new version. Rings target specific user groups (internal → early adopters → broad users → all users) — the audience is controlled, not random. Rings are better for enterprise software where you want specific teams to validate before broader rollout.</p></div></div>
+    </div>
+  </div>
+</main>
+
+<script>
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const g = btn.dataset.group, t = btn.dataset.tab;
+    document.querySelectorAll(`.tab-btn[data-group="${g}"]`).forEach(b => b.classList.remove('active'));
+    document.querySelectorAll(`.tab-panel[data-group="${g}"]`).forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelector(`.tab-panel[data-group="${g}"][data-tab="${t}"]`).classList.add('active');
+  });
+});
+document.querySelectorAll('.qa-question').forEach(btn => {
+  btn.addEventListener('click', () => { btn.classList.toggle('open'); btn.nextElementSibling.classList.toggle('open'); });
+});
+document.querySelectorAll('.copy-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const code = btn.closest('.code-block').querySelector('pre').innerText;
+    navigator.clipboard.writeText(code).then(() => {
+      btn.textContent = 'Copied!'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+    });
+  });
+});
+</script>
+</body>
+</html>

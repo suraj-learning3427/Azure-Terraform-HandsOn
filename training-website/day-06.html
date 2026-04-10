@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Day 6 — CI/CD Deep Dive + GitHub Actions</title>
+<link rel="stylesheet" href="assets/style.css"/></head>
+<body>
+<nav class="sidebar"><div class="sidebar-header"><div class="logo">⚡ Azure Training</div><div class="subtitle">Apr 7–30, 2026</div></div><ul class="nav-list"><li><a href="index.html" class="nav-link">🏠 Overview</a></li><li class="nav-section">Week 1</li><li><a href="day-01.html" class="nav-link">Day 1 — App Service + Terraform</a></li><li><a href="day-02.html" class="nav-link">Day 2 — SQL + Containers</a></li><li><a href="day-03.html" class="nav-link">Day 3 — Auth + APIM</a></li><li class="nav-section">Week 2</li><li><a href="day-04.html" class="nav-link">Day 4 — DevOps + Modules</a></li><li><a href="day-05.html" class="nav-link">Day 5 — CI/CD + AKS</a></li><li><a href="day-06.html" class="nav-link active">Day 6 — GitHub Actions</a></li><li class="nav-section">Week 3</li><li><a href="day-07.html" class="nav-link">Day 7 — Release Strategies</a></li><li><a href="day-08.html" class="nav-link">Day 8 — Canary + A/B Testing</a></li><li><a href="day-09.html" class="nav-link">Day 9 — Security</a></li><li class="nav-section">Week 4</li><li><a href="day-10.html" class="nav-link">Day 10 — Full Pipeline POC</a></li><li><a href="day-11.html" class="nav-link">Day 11 — 3-Tier + GitOps</a></li><li><a href="day-12.html" class="nav-link">Day 12 — Interview Prep</a></li></ul></nav>
+
+<main class="main">
+  <header class="page-header">
+    <h1>Day 6 — CI/CD Deep Dive + GitHub Actions</h1>
+    <div class="day-meta"><span>📅 April 16, 2026</span><span>👥 Varsha &amp; Gowtham</span><span>🔬 GitHub Actions Migration</span></div>
+  </header>
+  <div class="day-nav"><a href="day-05.html" class="prev">← Day 5</a><a href="day-07.html" class="next">Day 7 →</a></div>
+
+  <div class="tabs" data-group="d6">
+    <button class="tab-btn active" data-group="d6" data-tab="theory">📖 Theory</button>
+    <button class="tab-btn" data-group="d6" data-tab="poc">🔬 Hands-On</button>
+    <button class="tab-btn" data-group="d6" data-tab="qa">❓ Interview Q&amp;A</button>
+  </div>
+
+  <!-- THEORY -->
+  <div class="tab-panel active" data-group="d6" data-tab="theory">
+    <div class="info-box blue"><strong>Today's Goal:</strong> GitHub Actions workflows, OIDC authentication (no stored secrets), matrix strategy, reusable workflows, and multi-stage container build strategy.</div>
+
+    <section class="section">
+      <h2 class="section-title">GitHub Actions Workflow Syntax</h2>
+      <div class="code-block"><div class="code-header"><span class="code-lang">yaml</span><button class="copy-btn">Copy</button></div><pre><span class="cm"># .github/workflows/ci-cd.yml</span>
+<span class="kw">name:</span> CI/CD Pipeline
+
+<span class="kw">on:</span>
+  <span class="kw">push:</span>
+    <span class="kw">branches:</span> [main]
+  <span class="kw">pull_request:</span>
+    <span class="kw">branches:</span> [main]
+
+<span class="kw">env:</span>
+  AZURE_WEBAPP_NAME: myapp-prod
+  DOTNET_VERSION: <span class="str">'8.0.x'</span>
+
+<span class="kw">jobs:</span>
+  <span class="kw">build:</span>
+    <span class="kw">runs-on:</span> ubuntu-latest
+    <span class="kw">steps:</span>
+      - <span class="kw">uses:</span> actions/checkout@v4
+      - <span class="kw">uses:</span> actions/setup-dotnet@v4
+        <span class="kw">with:</span>
+          <span class="kw">dotnet-version:</span> <span class="op">${{ env.DOTNET_VERSION }}</span>
+      - <span class="kw">run:</span> dotnet build --configuration Release
+      - <span class="kw">run:</span> dotnet test --collect:<span class="str">"XPlat Code Coverage"</span>
+      - <span class="kw">uses:</span> actions/upload-artifact@v4
+        <span class="kw">with:</span>
+          <span class="kw">name:</span> webapp
+          <span class="kw">path:</span> ./publish
+
+  <span class="kw">deploy:</span>
+    <span class="kw">needs:</span> build
+    <span class="kw">runs-on:</span> ubuntu-latest
+    <span class="kw">environment:</span> production   <span class="cm"># Requires approval</span>
+    <span class="kw">permissions:</span>
+      <span class="kw">id-token:</span> write   <span class="cm"># Required for OIDC</span>
+      <span class="kw">contents:</span> read
+    <span class="kw">steps:</span>
+      - <span class="kw">uses:</span> actions/download-artifact@v4
+        <span class="kw">with:</span>
+          <span class="kw">name:</span> webapp
+      - <span class="kw">uses:</span> azure/login@v2
+        <span class="kw">with:</span>
+          <span class="kw">client-id:</span> <span class="op">${{ secrets.AZURE_CLIENT_ID }}</span>
+          <span class="kw">tenant-id:</span> <span class="op">${{ secrets.AZURE_TENANT_ID }}</span>
+          <span class="kw">subscription-id:</span> <span class="op">${{ secrets.AZURE_SUBSCRIPTION_ID }}</span>
+      - <span class="kw">uses:</span> azure/webapps-deploy@v3
+        <span class="kw">with:</span>
+          <span class="kw">app-name:</span> <span class="op">${{ env.AZURE_WEBAPP_NAME }}</span></pre></div>
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">OIDC Authentication — No Stored Secrets</h2>
+      <div class="info-box green"><strong>Why OIDC?</strong> Traditional service principal secrets expire, can be leaked, and need manual rotation. OIDC uses short-lived tokens — Azure trusts GitHub's identity provider. No credentials stored anywhere.</div>
+      <div class="code-block"><div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div><pre><span class="cm"># 1. Create app registration</span>
+az ad app create --display-name <span class="str">"github-actions-myapp"</span>
+APP_ID=$(az ad app list --display-name <span class="str">"github-actions-myapp"</span> --query <span class="str">"[0].appId"</span> -o tsv)
+az ad sp create --id $APP_ID
+
+<span class="cm"># 2. Add federated credential for GitHub Actions</span>
+az ad app federated-credential create \
+  --id $APP_ID \
+  --parameters <span class="str">'{
+    "name": "github-prod",
+    "issuer": "https://token.actions.githubusercontent.com",
+    "subject": "repo:myorg/myrepo:environment:production",
+    "audiences": ["api://AzureADTokenExchange"]
+  }'</span>
+
+<span class="cm"># 3. Grant Contributor on subscription</span>
+az role assignment create \
+  --role Contributor \
+  --assignee $APP_ID \
+  --scope /subscriptions/$(az account show --query id -o tsv)
+
+<span class="cm"># 4. Add to GitHub Secrets (IDs only — no passwords!)</span>
+<span class="cm"># AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID</span></pre></div>
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">Matrix Strategy — Parallel Testing</h2>
+      <div class="code-block"><div class="code-header"><span class="code-lang">yaml</span><button class="copy-btn">Copy</button></div><pre><span class="kw">jobs:</span>
+  <span class="kw">test:</span>
+    <span class="kw">runs-on:</span> ubuntu-latest
+    <span class="kw">strategy:</span>
+      <span class="kw">matrix:</span>
+        <span class="kw">node-version:</span> [18, 20, 22]
+        <span class="kw">os:</span> [ubuntu-latest, windows-latest]
+    <span class="kw">steps:</span>
+      - <span class="kw">uses:</span> actions/setup-node@v4
+        <span class="kw">with:</span>
+          <span class="kw">node-version:</span> <span class="op">${{ matrix.node-version }}</span>
+      - <span class="kw">run:</span> npm test</pre></div>
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">Multi-Stage Dockerfile</h2>
+      <div class="info-box orange"><strong>Why multi-stage?</strong> Final image has no SDK, no build tools, no source code. Reduces image size from ~800MB to ~200MB and reduces attack surface.</div>
+      <div class="code-block"><div class="code-header"><span class="code-lang">dockerfile</span><button class="copy-btn">Copy</button></div><pre><span class="cm"># Stage 1: Build (includes SDK)</span>
+<span class="kw">FROM</span> mcr.microsoft.com/dotnet/sdk:8.0 <span class="kw">AS</span> build
+<span class="kw">WORKDIR</span> /src
+<span class="kw">COPY</span> [<span class="str">"MyApp.csproj"</span>, <span class="str">"."</span>]
+<span class="kw">RUN</span> dotnet restore
+<span class="kw">COPY</span> . .
+<span class="kw">RUN</span> dotnet publish -c Release -o /app/publish
+
+<span class="cm"># Stage 2: Runtime only (small, secure)</span>
+<span class="kw">FROM</span> mcr.microsoft.com/dotnet/aspnet:8.0 <span class="kw">AS</span> final
+<span class="kw">WORKDIR</span> /app
+<span class="cm"># Run as non-root user</span>
+<span class="kw">RUN</span> adduser --disabled-password appuser &amp;&amp; chown -R appuser /app
+<span class="kw">USER</span> appuser
+<span class="kw">COPY</span> --from=build /app/publish .
+<span class="kw">EXPOSE</span> 8080
+<span class="kw">ENTRYPOINT</span> [<span class="str">"dotnet"</span>, <span class="str">"MyApp.dll"</span>]</pre></div>
+    </section>
+  </div>
+
+  <!-- POC -->
+  <div class="tab-panel" data-group="d6" data-tab="poc">
+    <div class="info-box blue"><strong>Hands-On:</strong> Migrate the POC 2 pipeline from Azure Pipelines to GitHub Actions with OIDC authentication and environment protection rules.</div>
+
+    <section class="section">
+      <h2 class="section-title">Steps</h2>
+      <div class="card">
+        <div class="card-title">1. Create GitHub Actions Workflow</div>
+        <p>Create <code>.github/workflows/ci-cd.yml</code> with build and deploy jobs. Use the OIDC login action — no stored secrets.</p>
+      </div>
+      <div class="card">
+        <div class="card-title">2. Configure OIDC Federated Identity</div>
+        <p>Run the Azure CLI commands above to create the federated credential. Add only the three IDs (not secrets) to GitHub repository secrets.</p>
+      </div>
+      <div class="card">
+        <div class="card-title">3. Add Environment Protection Rule</div>
+        <p>GitHub → Settings → Environments → production → Add required reviewer. Pipeline will pause and wait for approval before deploying to production.</p>
+      </div>
+      <div class="card">
+        <div class="card-title">4. Validate</div>
+        <div class="code-block"><div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div><pre><span class="cm"># Push to main and verify pipeline runs</span>
+git push origin main
+
+<span class="cm"># Check GitHub Actions tab — build should pass</span>
+<span class="cm"># Deploy job should pause waiting for approval</span>
+<span class="cm"># Approve → verify app deployed to Azure</span>
+az webapp show --name myapp-dev --resource-group myRG --query state -o tsv</pre></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Q&A -->
+  <div class="tab-panel" data-group="d6" data-tab="qa">
+    <div class="qa-list">
+      <div class="qa-item"><button class="qa-question">What is OIDC and why is it better than storing service principal secrets?<span class="qa-arrow">▼</span></button><div class="qa-answer"><p>OIDC allows GitHub Actions to authenticate to Azure using short-lived tokens issued by GitHub's identity provider — no credentials stored anywhere. Azure trusts GitHub's OIDC issuer and issues access tokens based on the workflow's identity (repo + branch + environment). No secrets to rotate, no risk of credential leakage from a compromised repo.</p></div></div>
+      <div class="qa-item"><button class="qa-question">A developer committed a service principal secret to GitHub. What do you do?<span class="qa-arrow">▼</span></button><div class="qa-answer"><p><strong>Immediate:</strong> 1) Rotate the secret immediately — assume it's compromised. 2) Check Azure AD sign-in logs for unauthorized use. 3) Clean git history with <code>git filter-repo</code>. 4) Force-push and notify team to re-clone.</p><p><strong>Prevention:</strong> Implement OIDC (no secrets to commit), add <code>gitleaks</code> as pre-commit hook and CI check, enable GitHub Advanced Security secret scanning.</p></div></div>
+      <div class="qa-item"><button class="qa-question">What is the benefit of multi-stage Docker builds?<span class="qa-arrow">▼</span></button><div class="qa-answer"><p>The final image only contains the runtime — no SDK, no build tools, no source code. This reduces image size (e.g., from 800MB to 200MB), reduces attack surface (fewer packages = fewer CVEs), and speeds up image pulls. The build stage is discarded — only the published artifacts are copied to the final stage.</p></div></div>
+      <div class="qa-item"><button class="qa-question">How do you speed up a slow CI pipeline?<span class="qa-arrow">▼</span></button><div class="qa-answer"><p>1) Cache dependencies (<code>actions/cache</code> for npm/nuget/pip). 2) Parallelize with matrix strategy. 3) Move slow integration tests to a separate nightly pipeline. 4) Use Docker layer caching for container builds. 5) Run fastest tests first (unit → integration → e2e). Target: &lt; 10 minutes for CI.</p></div></div>
+      <div class="qa-item"><button class="qa-question">What is the difference between `needs` and `if` in GitHub Actions?<span class="qa-arrow">▼</span></button><div class="qa-answer"><p><code>needs</code> defines execution order — a job won't start until its dependencies complete. <code>if</code> defines whether a job runs at all — e.g., <code>if: github.ref == 'refs/heads/main'</code> only runs on main branch. You can combine them: depend on a previous job AND only run if it succeeded AND only on main.</p></div></div>
+    </div>
+  </div>
+</main>
+
+<script>
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const g = btn.dataset.group, t = btn.dataset.tab;
+    document.querySelectorAll(`.tab-btn[data-group="${g}"]`).forEach(b => b.classList.remove('active'));
+    document.querySelectorAll(`.tab-panel[data-group="${g}"]`).forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelector(`.tab-panel[data-group="${g}"][data-tab="${t}"]`).classList.add('active');
+  });
+});
+document.querySelectorAll('.qa-question').forEach(btn => {
+  btn.addEventListener('click', () => {
+    btn.classList.toggle('open');
+    btn.nextElementSibling.classList.toggle('open');
+  });
+});
+document.querySelectorAll('.copy-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const code = btn.closest('.code-block').querySelector('pre').innerText;
+    navigator.clipboard.writeText(code).then(() => {
+      btn.textContent = 'Copied!'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+    });
+  });
+});
+</script>
+</body>
+</html>

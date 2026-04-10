@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Day 5 — CI/CD Pipelines + Azure Infrastructure with Terraform</title>
+<link rel="stylesheet" href="assets/style.css"/></head>
+<body>
+<nav class="sidebar"><div class="sidebar-header"><div class="logo">⚡ Azure Training</div><div class="subtitle">Apr 7–30, 2026</div></div><ul class="nav-list"><li><a href="index.html" class="nav-link">🏠 Overview</a></li><li class="nav-section">Week 1</li><li><a href="day-01.html" class="nav-link">Day 1 — App Service + Terraform</a></li><li><a href="day-02.html" class="nav-link">Day 2 — SQL + Containers</a></li><li><a href="day-03.html" class="nav-link">Day 3 — Auth + APIM</a></li><li class="nav-section">Week 2</li><li><a href="day-04.html" class="nav-link">Day 4 — DevOps + Modules</a></li><li><a href="day-05.html" class="nav-link active">Day 5 — CI/CD + AKS</a></li><li><a href="day-06.html" class="nav-link">Day 6 — GitHub Actions</a></li><li class="nav-section">Week 3</li><li><a href="day-07.html" class="nav-link">Day 7 — Release Strategies</a></li><li><a href="day-08.html" class="nav-link">Day 8 — Canary + A/B Testing</a></li><li><a href="day-09.html" class="nav-link">Day 9 — Security</a></li><li class="nav-section">Week 4</li><li><a href="day-10.html" class="nav-link">Day 10 — Full Pipeline POC</a></li><li><a href="day-11.html" class="nav-link">Day 11 — 3-Tier + GitOps</a></li><li><a href="day-12.html" class="nav-link">Day 12 — Interview Prep</a></li></ul></nav>
+<main class="main">
+  <header class="page-header">
+    <h1>Day 5 — CI/CD Pipelines + Azure Infrastructure with Terraform</h1>
+    <div class="day-meta"><span>📅 April 15, 2026</span><span>👥 Suraj &amp; Joby</span><span>🔬 POC 2 Complete</span></div>
+  </header>
+  <div class="day-nav"><a href="day-04.html" class="prev">← Day 4</a><a href="day-06.html" class="next">Day 6 →</a></div>
+
+  <div class="tabs" data-group="d5">
+    <button class="tab-btn active" data-group="d5" data-tab="theory">📖 Theory</button>
+    <button class="tab-btn" data-group="d5" data-tab="poc">🔬 POC 2 Complete</button>
+    <button class="tab-btn" data-group="d5" data-tab="qa">❓ Interview Q&amp;A</button>
+  </div>
+
+  <div class="tab-panel active" data-group="d5" data-tab="theory">
+    <div class="info-box blue"><strong>Today's Goal:</strong> Azure Pipelines YAML with stages, templates, quality gates, and approval gates. AKS cluster provisioning with Terraform.</div>
+
+    <section class="section">
+      <h2 class="section-title">Azure Pipelines YAML Structure</h2>
+      <div class="code-block"><div class="code-header"><span class="code-lang">yaml</span><button class="copy-btn">Copy</button></div>
+      <pre>trigger:
+  branches:
+    include: [main]
+
+variables:
+  buildConfiguration: Release
+
+stages:
+  - stage: Build
+    jobs:
+      - job: BuildAndTest
+        pool:
+          vmImage: ubuntu-latest
+        steps:
+          - task: UseDotNet@2
+            inputs:
+              version: <span class="str">'8.0.x'</span>
+          - script: dotnet build --configuration $(buildConfiguration)
+          - script: dotnet test --collect:<span class="str">"XPlat Code Coverage"</span>
+          - task: PublishCodeCoverageResults@1
+            inputs:
+              codeCoverageTool: Cobertura
+              summaryFileLocation: <span class="str">'**/coverage.cobertura.xml'</span>
+          - publish: $(Build.ArtifactStagingDirectory)
+            artifact: webapp
+
+  - stage: Deploy_Dev
+    dependsOn: Build
+    condition: and(succeeded(), eq(variables[<span class="str">'Build.SourceBranch'</span>], <span class="str">'refs/heads/main'</span>))
+    jobs:
+      - deployment: DeployToDev
+        environment: dev
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureWebApp@1
+                  inputs:
+                    azureSubscription: <span class="str">'MyServiceConnection'</span>
+                    appName: <span class="str">'myapp-dev'</span>
+
+  - stage: Deploy_Prod
+    dependsOn: Deploy_Dev
+    jobs:
+      - deployment: DeployToProd
+        environment: production   <span class="cm"># ← Approval gate configured here</span>
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureWebApp@1
+                  inputs:
+                    azureSubscription: <span class="str">'MyServiceConnection'</span>
+                    appName: <span class="str">'myapp-prod'</span></pre></div>
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">Configure Approval Gate</h2>
+      <div class="card">
+        <div class="card-title">Steps to Add Approval Gate</div>
+        <ol>
+          <li>Go to <strong>Pipelines → Environments → production</strong></li>
+          <li>Click <strong>Approvals and checks → Add → Approvals</strong></li>
+          <li>Add approvers (e.g., "Release Managers" group)</li>
+          <li>Set timeout (e.g., 24 hours)</li>
+          <li>The pipeline will pause at the production stage until approved</li>
+        </ol>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">AKS Cluster with Terraform</h2>
+      <div class="code-block"><div class="code-header"><span class="code-lang">hcl</span><button class="copy-btn">Copy</button></div>
+      <pre><span class="kw">resource</span> <span class="str">"azurerm_kubernetes_cluster"</span> <span class="str">"main"</span> {
+  name                = <span class="str">"aks-training-prod"</span>
+  resource_group_name = <span class="kw">var</span>.resource_group_name
+  location            = <span class="kw">var</span>.location
+  dns_prefix          = <span class="str">"training"</span>
+  kubernetes_version  = <span class="str">"1.28"</span>
+
+  <span class="cm"># System node pool (runs kube-system pods)</span>
+  default_node_pool {
+    name                = <span class="str">"system"</span>
+    node_count          = <span class="num">3</span>
+    vm_size             = <span class="str">"Standard_D4s_v3"</span>
+    vnet_subnet_id      = <span class="kw">var</span>.aks_subnet_id
+    enable_auto_scaling = <span class="kw">true</span>
+    min_count           = <span class="num">3</span>; max_count = <span class="num">5</span>
+    node_taints         = [<span class="str">"CriticalAddonsOnly=true:NoSchedule"</span>]
+  }
+
+  identity { type = <span class="str">"SystemAssigned"</span> }
+
+  network_profile {
+    network_plugin    = <span class="str">"azure"</span>   <span class="cm"># Azure CNI — pods get VNet IPs</span>
+    network_policy    = <span class="str">"calico"</span>
+    load_balancer_sku = <span class="str">"standard"</span>
+    service_cidr      = <span class="str">"172.16.0.0/16"</span>
+    dns_service_ip    = <span class="str">"172.16.0.10"</span>
+  }
+
+  azure_active_directory_role_based_access_control {
+    managed = <span class="kw">true</span>; azure_rbac_enabled = <span class="kw">true</span>
+  }
+
+  oms_agent {
+    log_analytics_workspace_id = <span class="kw">var</span>.log_analytics_workspace_id
+  }
+
+  lifecycle {
+    ignore_changes = [
+      default_node_pool[<span class="num">0</span>].node_count,  <span class="cm"># Managed by autoscaler</span>
+      kubernetes_version                 <span class="cm"># Managed by upgrade policy</span>
+    ]
+  }
+}
+
+<span class="cm"># User node pool for application workloads</span>
+<span class="kw">resource</span> <span class="str">"azurerm_kubernetes_cluster_node_pool"</span> <span class="str">"user"</span> {
+  name                  = <span class="str">"user"</span>
+  kubernetes_cluster_id = azurerm_kubernetes_cluster.main.id
+  vm_size               = <span class="str">"Standard_D4s_v3"</span>
+  vnet_subnet_id        = <span class="kw">var</span>.aks_subnet_id
+  enable_auto_scaling   = <span class="kw">true</span>
+  min_count             = <span class="num">2</span>; max_count = <span class="num">20</span>
+}</pre></div>
+    </section>
+  </div>
+
+  <div class="tab-panel" data-group="d5" data-tab="poc">
+    <div class="info-box blue"><strong>POC 2 Complete:</strong> CI pipeline running green with quality gates + VMSS infrastructure deployed.</div>
+    <section class="section">
+      <h2 class="section-title">Pipeline YAML for POC 2</h2>
+      <div class="code-block"><div class="code-header"><span class="code-lang">yaml — azure-pipelines.yml</span><button class="copy-btn">Copy</button></div>
+      <pre>trigger:
+  branches:
+    include: [main]
+
+stages:
+  - stage: Build
+    jobs:
+      - job: Build
+        pool:
+          vmImage: ubuntu-latest
+        steps:
+          - task: DotNetCoreCLI@2
+            inputs:
+              command: test
+              arguments: <span class="str">'--collect:"XPlat Code Coverage"'</span>
+          - task: PublishCodeCoverageResults@1
+            inputs:
+              codeCoverageTool: Cobertura
+              summaryFileLocation: <span class="str">'**/coverage.cobertura.xml'</span>
+          - publish: $(Build.ArtifactStagingDirectory)
+            artifact: webapp
+
+  - stage: Deploy
+    dependsOn: Build
+    condition: and(succeeded(), eq(variables[<span class="str">'Build.SourceBranch'</span>], <span class="str">'refs/heads/main'</span>))
+    jobs:
+      - deployment: Deploy
+        environment: dev
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureWebApp@1
+                  inputs:
+                    azureSubscription: <span class="str">'MyServiceConnection'</span>
+                    appName: <span class="str">'app-poc2-dev'</span></pre></div>
+    </section>
+    <section class="section">
+      <h2 class="section-title">✅ Validation Checklist</h2>
+      <ul class="checklist">
+        <li>Pipeline runs green on push to main</li>
+        <li>Unit test results published in pipeline</li>
+        <li>Code coverage report visible in pipeline</li>
+        <li>VMSS shows 2 healthy instances</li>
+        <li>Load balancer health probe returns healthy</li>
+        <li>Autoscale triggers on CPU &gt; 70%</li>
+      </ul>
+    </section>
+  </div>
+
+  <div class="tab-panel" data-group="d5" data-tab="qa">
+    <div class="qa-list">
+      <div class="qa-item"><button class="qa-question">What is the difference between CI, Continuous Delivery, and Continuous Deployment? <span class="qa-arrow">▼</span></button><div class="qa-answer"><p>CI: every commit triggers automated build and test — detects integration issues early. Continuous Delivery: every successful CI build produces a release candidate that <em>could</em> be deployed to production with a button click. Continuous Deployment: every successful build is <em>automatically</em> deployed to production with no human intervention. Most enterprises practice Continuous Delivery — they need change management approval for production.</p></div></div>
+      <div class="qa-item"><button class="qa-question">How do you implement approval gates in Azure Pipelines? <span class="qa-arrow">▼</span></button><div class="qa-answer"><p>Configure them on Environments (not on the pipeline YAML). Go to Pipelines → Environments → production → Approvals and checks → Add → Approvals. Add approvers and timeout. In the pipeline YAML, use a <code>deployment</code> job targeting that environment — it will automatically wait for approval before proceeding.</p></div></div>
+      <div class="qa-item"><button class="qa-question">What is artifact immutability and why does it matter? <span class="qa-arrow">▼</span></button><div class="qa-answer"><p>Build once, deploy the same artifact everywhere. The same binary/container image that passed tests in dev is deployed to staging and then production — no rebuilding. This ensures what you tested is exactly what runs in production. Rebuilding for each environment risks introducing differences (different dependency versions, build environment changes).</p></div></div>
+      <div class="qa-item"><button class="qa-question">What is the difference between Azure CNI and kubenet networking in AKS? <span class="qa-arrow">▼</span></button><div class="qa-answer"><p>Kubenet: pods get IPs from a separate pod CIDR, not from the VNet — limited connectivity to other VNet resources. Azure CNI: pods get IPs directly from the VNet subnet — they're first-class VNet citizens. Required for: private endpoints, direct pod-to-pod communication across VNets, network policies with Calico. Azure CNI requires more IP addresses — plan subnet size carefully.</p></div></div>
+      <div class="qa-item"><button class="qa-question">Why use <code>ignore_changes = [default_node_pool[0].node_count]</code> on AKS? <span class="qa-arrow">▼</span></button><div class="qa-answer"><p>The cluster autoscaler manages node count dynamically. Without <code>ignore_changes</code>, every <code>terraform apply</code> would reset the node count to the value in the config, overriding the autoscaler's decisions and potentially destroying nodes that have running pods.</p></div></div>
+    </div>
+  </div>
+</main>
+<script src="assets/app.js"></script>
+</body></html>

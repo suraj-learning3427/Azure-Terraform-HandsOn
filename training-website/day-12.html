@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Day 12 — Capstone Review + Interview Preparation</title>
+<link rel="stylesheet" href="assets/style.css"/></head>
+<body>
+<nav class="sidebar"><div class="sidebar-header"><div class="logo">⚡ Azure Training</div><div class="subtitle">Apr 7–30, 2026</div></div><ul class="nav-list"><li><a href="index.html" class="nav-link">🏠 Overview</a></li><li class="nav-section">Week 1</li><li><a href="day-01.html" class="nav-link">Day 1 — App Service + Terraform</a></li><li><a href="day-02.html" class="nav-link">Day 2 — SQL + Containers</a></li><li><a href="day-03.html" class="nav-link">Day 3 — Auth + APIM</a></li><li class="nav-section">Week 2</li><li><a href="day-04.html" class="nav-link">Day 4 — DevOps + Modules</a></li><li><a href="day-05.html" class="nav-link">Day 5 — CI/CD + AKS</a></li><li><a href="day-06.html" class="nav-link">Day 6 — GitHub Actions</a></li><li class="nav-section">Week 3</li><li><a href="day-07.html" class="nav-link">Day 7 — Release Strategies</a></li><li><a href="day-08.html" class="nav-link">Day 8 — Canary + A/B Testing</a></li><li><a href="day-09.html" class="nav-link">Day 9 — Security</a></li><li class="nav-section">Week 4</li><li><a href="day-10.html" class="nav-link">Day 10 — Full Pipeline POC</a></li><li><a href="day-11.html" class="nav-link">Day 11 — 3-Tier + GitOps</a></li><li><a href="day-12.html" class="nav-link active">Day 12 — Interview Prep</a></li></ul></nav>
+
+<main class="main">
+  <header class="page-header">
+    <h1>Day 12 — Capstone Review + Interview Preparation</h1>
+    <div class="day-meta"><span>📅 April 30, 2026</span><span>👥 Lini &amp; Karthik</span><span>🎯 Interview Ready</span></div>
+  </header>
+  <div class="day-nav"><a href="day-11.html" class="prev">← Day 11</a><a href="index.html">🏠 Overview</a></div>
+
+  <div class="tabs" data-group="d12">
+    <button class="tab-btn active" data-group="d12" data-tab="review">📋 Concept Review</button>
+    <button class="tab-btn" data-group="d12" data-tab="top25">🎯 Top 25 Questions</button>
+    <button class="tab-btn" data-group="d12" data-tab="scenarios">💡 Scenarios</button>
+    <button class="tab-btn" data-group="d12" data-tab="checklist">✅ Ready Checklist</button>
+  </div>
+
+  <!-- REVIEW -->
+  <div class="tab-panel active" data-group="d12" data-tab="review">
+    <div class="info-box blue"><strong>Today's Goal:</strong> Consolidate all 12 days of learning. Practice the top interview questions. Leave confident and ready.</div>
+
+    <section class="section">
+      <h2 class="section-title">The 5 Most Important Concepts</h2>
+      <div class="two-col">
+        <div class="card" style="border-top:3px solid var(--blue)">
+          <div class="card-title">1. Managed Identity</div>
+          <p>Never store credentials. Use Managed Identity for all Azure resource authentication. System-assigned for single resources, user-assigned for shared identity across multiple resources.</p>
+        </div>
+        <div class="card" style="border-top:3px solid var(--blue)">
+          <div class="card-title">2. Remote State</div>
+          <p>Always use Azure Storage backend for Terraform in teams. State locking prevents conflicts. Separate state files per environment. Never use local state in a team.</p>
+        </div>
+        <div class="card" style="border-top:3px solid var(--blue)">
+          <div class="card-title">3. Deployment Slots</div>
+          <p>Zero-downtime deployments. Slot-specific settings stay with the slot. Swap is atomic. Rollback in &lt; 30 seconds. Canary with traffic routing before full swap.</p>
+        </div>
+        <div class="card" style="border-top:3px solid var(--blue)">
+          <div class="card-title">4. DORA Metrics</div>
+          <p>Deployment Frequency, Lead Time for Changes, Change Failure Rate, Time to Restore. Elite: multiple deploys/day, &lt;1hr lead time, &lt;5% failure rate, &lt;1hr recovery.</p>
+        </div>
+      </div>
+      <div class="card" style="border-top:3px solid var(--blue)">
+        <div class="card-title">5. Shift-Left Security</div>
+        <p>Security at every stage: IDE (SonarLint) → pre-commit (gitleaks) → PR (SAST) → CI (Trivy, Checkov) → staging (DAST) → production (Defender for Cloud). Cost of fixing in dev = 10x cheaper than production.</p>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">Quick Reference Table</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Service</th><th>Key Points</th><th>Common Interview Topics</th></tr></thead>
+        <tbody>
+          <tr><td><strong>App Service</strong></td><td>Plans (Free→Isolated), slots, auto-scale, Managed Identity</td><td>Tier selection, slot-specific settings, cold starts</td></tr>
+          <tr><td><strong>Azure SQL</strong></td><td>vCore vs DTU, TDE, DDM, Always Encrypted, failover groups</td><td>Encryption differences, HA options, private endpoints</td></tr>
+          <tr><td><strong>Container Apps</strong></td><td>Scale-to-zero, traffic splitting, Dapr, KEDA</td><td>vs ACI vs AKS decision</td></tr>
+          <tr><td><strong>AKS</strong></td><td>System/user node pools, Azure CNI, RBAC, autoscaler</td><td>Node sizing, private cluster, CSI driver</td></tr>
+          <tr><td><strong>Key Vault</strong></td><td>RBAC vs access policies, Managed Identity, KV references</td><td>Secret rotation, federated identity</td></tr>
+          <tr><td><strong>APIM</strong></td><td>Policy pipeline, JWT validation, rate limiting</td><td>Policy order, debugging 401s</td></tr>
+          <tr><td><strong>Azure Policy</strong></td><td>Audit/Deny/DeployIfNotExists/Modify</td><td>Effect selection, compliance reporting</td></tr>
+          <tr><td><strong>Terraform</strong></td><td>State, modules, for_each, lifecycle</td><td>State management, count vs for_each</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+  </div>
+
+  <!-- TOP 25 -->
+  <div class="tab-panel" data-group="d12" data-tab="top25">
+    <div class="info-box green"><strong>Top 25 questions clients ask.</strong> Click each to see the answer. Practice saying them out loud.</div>
+    <div class="qa-list">
+      <div class="qa-item"><button class="qa-question">1. Walk me through a CI/CD pipeline you've designed.<span class="qa-arrow">▼</span></button><div class="qa-answer"><p>Structure: trigger → build → test (with coverage) → security scan (Trivy, Checkov, SAST) → artifact → deploy to staging → approval → deploy to production. Key points: OIDC auth (no stored secrets), quality gates (80% coverage, 0 new vulnerabilities), rollback plan (slot swap back in &lt;30s).</p></div></div>
+      <div class="qa-item"><button class="qa-question">2. How do you implement zero-downtime deployments?<span class="qa-arrow">▼</span></button><div class="qa-answer"><p>App Service deployment slots: deploy to staging → smoke test → canary 10% → approval → swap to production. Rollback: swap back in &lt;30 seconds. Database migrations use expand-contract pattern for backward compatibility.</p></div></div>
+      <div class="qa-item"><button class="qa-question">3. What are DORA metrics and what do they measure?<span class="qa-arrow">▼</span></button><div class="qa-answer"><p>Deployment Frequency (how often you deploy to production), Lead Time for Changes (commit to production), Change Failure Rate (% of deployments causing incidents), Time to Restore Service (how long to recover). Elite: multiple deploys/day, &lt;1hr lead time, &lt;5% failure rate, &lt;1hr recovery.</p></div></div>
+      <div class="qa-item"><button class="qa-question">4. How do you secure secrets in Azure DevOps pipelines?<span class="qa-arrow">▼</span></button><div class="qa-answer"><p>Variable groups linked to Key Vault. OIDC federated identity (no stored service principal secrets). Never store secrets in pipeline YAML. Secret scanning in CI (gitleaks, detect-secrets). Key Vault references in App Service app settings.</p></div></div>
+      <div class="qa-item"><button class="qa-question">5. What is the difference between blue-green and canary?<span class="qa-arrow">▼</span></button><div class="qa-answer"><p>Blue-green: atomic switch, instant rollback, full traffic shift at once. Canary: gradual traffic shift (5%→25%→100%), validate with real traffic, automated rollback on metric breach. Blue-green for infrastructure upgrades, canary for feature releases.</p></div></div>
+      <div class="qa-item"><button class="qa-question">6. What is Terraform state and why is remote state important?<span class="qa-arrow">▼</span></button><div class="qa-answer"><p>State maps Terraform config to real Azure resources. Without it, Terraform can't know what already exists. Remote state (Azure Storage) enables team collaboration, state locking (prevents concurrent applies), and shared source of truth. Never use local state in a team.</p></div></div>
+      <div class="qa-item"><button class="qa-question">7. When would you use for_each vs count in Terraform?<span class="qa-arrow">▼</span></button><div class="qa-answer"><p><code>for_each</code> almost always — stable keys, removing one item only affects that resource. <code>count</code> has index instability — removing the middle item shifts all subsequent indexes, causing unnecessary destroy/recreate. Use <code>count</code> only for optional resources: <code>count = var.enabled ? 1 : 0</code>.</p></div></div>
+      <div class="qa-item"><button class="qa-question">8. When would you choose Container Apps over AKS?<span class="qa-arrow">▼</span></button><div class="qa-answer"><p>Container Apps for most microservices — removes 80% of K8s overhead, built-in scale-to-zero, Dapr, traffic splitting. AKS when you need full K8s control, GPU nodes, custom operators, or your team has deep Kubernetes expertise. For new projects, start with Container Apps.</p></div></div>
+      <div class="qa-item"><button class="qa-question">9. What is the difference between TDE and Always Encrypted?<span class="qa-arrow">▼</span></button><div class="qa-answer"><p>TDE: storage-level encryption, DB engine sees plaintext — always on by default. Always Encrypted: client-side encryption, DB engine never sees plaintext, only the application with the column master key can decrypt. Use TDE always. Use Always Encrypted for most sensitive columns (SSN, credit card).</p></div></div>
+      <div class="qa-item"><button class="qa-question">10. What is Managed Identity and why is it better than service principal secrets?<span class="qa-arrow">▼</span></button><div class="qa-answer"><p>Managed Identity: Azure manages credentials automatically, you never see them, no rotation needed. Service principal: you manage credentials, must rotate, can be leaked. Always use Managed Identity when available (App Service, Functions, AKS, VMs). Use service principal only when Managed Identity isn't available.</p></div></div>
+      <div class="qa-item"><button class="qa-question">11. How do you handle database migrations in zero-downtime deployments?<span class="qa-arrow">▼</span></button><div class="qa-answer"><p>Expand-contract pattern: Phase 1 (Expand) — add new column as nullable, both old and new code work. Phase 2 (Deploy) — deploy new code that writes to the new column. Phase 3 (Contract) — add NOT NULL constraint, remove old code paths. 3 deployments, safe rollback at each step.</p></div></div>
+      <div class="qa-item"><button class="qa-question">12. What is GitOps?<span class="qa-arrow">▼</span></button><div class="qa-answer"><p>Git as single source of truth for cluster state. Flux/ArgoCD continuously reconciles cluster to match Git. Every change is a git commit — full audit trail, easy rollback. CI updates image tag in Git → Flux detects change → applies to AKS automatically.</p></div></div>
+      <div class="qa-item"><button class="qa-question">13. How do you reduce Azure costs by 40%?<span class="qa-arrow">▼</span></button><div class="qa-answer"><p>Right-size (check utilization — if CPU &lt;30%, downsize) → Reserved Instances (35-55% savings) → scale-in during off-hours (scheduled profiles) → move batch jobs to Functions (Consumption plan) → dev/test pricing → consolidate apps onto fewer App Service Plans.</p></div></div>
+      <div class="qa-item"><button class="qa-question">14. What is OIDC and why use it for pipelines?<span class="qa-arrow">▼</span></button><div class="qa-answer"><p>Short-lived tokens from identity provider — no stored credentials. Azure trusts GitHub/Azure DevOps OIDC issuer. No secrets to rotate or leak. Traditional service principal secrets expire, can be leaked from pipeline logs, and require manual rotation.</p></div></div>
+      <div class="qa-item"><button class="qa-question">15. How do you structure Terraform for multiple environments?<span class="qa-arrow">▼</span></button><div class="qa-answer"><p>Separate directories per environment (<code>environments/dev/</code>, <code>environments/prod/</code>) each with own state file. Shared logic in <code>modules/</code>. Each environment calls the same modules with different variable values. Never use Terraform workspaces for environment isolation — they share the same backend.</p></div></div>
+      <div class="qa-item"><button class="qa-question">16. What is shift-left security?<span class="qa-arrow">▼</span></button><div class="qa-answer"><p>Moving security checks earlier: IDE → pre-commit → PR → CI → staging → production. Cheaper to fix in development than production (10x cost difference). Tools: SonarLint (IDE), gitleaks (pre-commit), SonarCloud (SAST), Trivy (containers), Checkov (IaC), ZAP (DAST), Defender for Cloud (production).</p></div></div>
+      <div class="qa-item"><button class="qa-question">17. What is a private endpoint?<span class="qa-arrow">▼</span></button><div class="qa-answer"><p>A network interface in your VNet with a private IP that connects to an Azure service (SQL, Storage, Key Vault). The service is accessible only from your VNet — no public internet access. Required for production databases and Key Vaults. Disable public network access after creating the private endpoint.</p></div></div>
+      <div class="qa-item"><button class="qa-question">18. How do you implement auto-scaling in Azure?<span class="qa-arrow">▼</span></button><div class="qa-answer"><p>App Service: <code>az monitor autoscale create</code> with CPU-based rules (scale out &gt;70%, scale in &lt;30%). AKS: Cluster Autoscaler for nodes + HPA for pods. VMSS: <code>azurerm_monitor_autoscale_setting</code> in Terraform. Always pair scale-out with scale-in rules. Use cooldown periods to prevent thrashing.</p></div></div>
+      <div class="qa-item"><button class="qa-question">19. What is the expand-contract pattern?<span class="qa-arrow">▼</span></button><div class="qa-answer"><p>3-phase backward-compatible DB migration: Expand (add nullable column — both old and new code work) → Deploy (new code writes to new column) → Contract (add NOT NULL, remove old code paths). Ensures zero downtime and safe rollback at each phase.</p></div></div>
+      <div class="qa-item"><button class="qa-question">20. How do you design a multi-region architecture?<span class="qa-arrow">▼</span></button><div class="qa-answer"><p>Azure Front Door Premium → App Service/AKS in 2+ regions → SQL failover groups → Redis geo-replication. Front Door routes to nearest healthy region. RTO &lt;2 minutes (Front Door detects failure in ~30s), RPO &lt;5 seconds (SQL replication lag). Cost: running two full environments doubles compute costs.</p></div></div>
+      <div class="qa-item"><button class="qa-question">21. What is a blameless post-mortem?<span class="qa-arrow">▼</span></button><div class="qa-answer"><p>A post-incident review that focuses on systemic causes rather than blaming individuals. Goal: identify what failed in the process/system and how to prevent recurrence. Output: timeline of events, root cause analysis, action items with owners and due dates. Psychological safety is essential.</p></div></div>
+      <div class="qa-item"><button class="qa-question">22. What is the difference between Azure CNI and kubenet in AKS?<span class="qa-arrow">▼</span></button><div class="qa-answer"><p>Kubenet: pods get IPs from a separate pod CIDR, not from the VNet — limited connectivity to other VNet resources. Azure CNI: pods get IPs directly from the VNet subnet — first-class VNet citizens. Required for: private endpoints, direct pod-to-pod communication across VNets, network policies with Calico. Azure CNI requires more IP addresses — plan subnet size carefully.</p></div></div>
+      <div class="qa-item"><button class="qa-question">23. How do you handle a stuck Terraform state lock?<span class="qa-arrow">▼</span></button><div class="qa-answer"><p>1) Verify no Terraform process is actually running. 2) Get the lock ID from the error message. 3) Run <code>terraform force-unlock &lt;lock-id&gt;</code>. 4) Run <code>terraform plan</code> to verify state is consistent. Prevention: set pipeline timeouts so crashed pipelines release locks automatically.</p></div></div>
+      <div class="qa-item"><button class="qa-question">24. What Azure Policy effects are available?<span class="qa-arrow">▼</span></button><div class="qa-answer"><p>Audit (log non-compliant), Deny (block creation), DeployIfNotExists (auto-remediate), Modify (auto-fix properties). Use Audit first to understand impact, then switch to Deny for hard requirements. Use DeployIfNotExists for auto-enabling diagnostic settings on new resources.</p></div></div>
+      <div class="qa-item"><button class="qa-question">25. What is the Key Vault CSI driver?<span class="qa-arrow">▼</span></button><div class="qa-answer"><p>Mounts Key Vault secrets as files in pod volumes. Preferred over environment variables because: secrets are fetched at pod startup, automatically rotated, not visible in <code>kubectl describe pod</code>, and follow least privilege. Enable with <code>key_vault_secrets_provider { secret_rotation_enabled = true }</code> in AKS Terraform config.</p></div></div>
+    </div>
+  </div>
+
+  <!-- SCENARIOS -->
+  <div class="tab-panel" data-group="d12" data-tab="scenarios">
+    <div class="info-box orange"><strong>Practice these out loud.</strong> Structure your answers: situation → approach → outcome.</div>
+    <div class="qa-list">
+      <div class="qa-item"><button class="qa-question">Scenario: "Our app is down in production."<span class="qa-arrow">▼</span></button><div class="qa-answer"><p><strong>1. Immediate mitigation:</strong> Scale out (add instances), check if rollback is needed (swap slot back).<br><strong>2. Investigate:</strong> Application Insights → Failures, check recent deployments in Activity Log.<br><strong>3. Communicate:</strong> Update status page, notify stakeholders with ETA.<br><strong>4. Fix root cause:</strong> Based on investigation findings.<br><strong>5. Post-mortem:</strong> Blameless, focus on systemic improvements.</p></div></div>
+      <div class="qa-item"><button class="qa-question">Scenario: "Design a CI/CD pipeline for a financial services client."<span class="qa-arrow">▼</span></button><div class="qa-answer"><p><strong>Source control:</strong> GitHub with branch protection (2 approvals, signed commits, build validation).<br><strong>CI:</strong> build → unit tests (80% coverage) → SAST (SonarCloud) → dependency scan → container scan (Trivy) → IaC scan (Checkov).<br><strong>CD:</strong> staging (auto) → approval gate → production (blue-green with canary).<br><strong>Security:</strong> OIDC auth, Key Vault for secrets, no stored credentials.<br><strong>Compliance:</strong> Audit trail, change management integration, Azure Policy for governance.</p></div></div>
+      <div class="qa-item"><button class="qa-question">Scenario: "Terraform plan shows production database will be destroyed."<span class="qa-arrow">▼</span></button><div class="qa-answer"><p><strong>1. Don't apply</strong> — stop immediately.<br><strong>2. Understand why:</strong> check which attribute changed, check provider changelog for breaking changes.<br><strong>3. Options:</strong> <code>ignore_changes</code> for drifted attributes, <code>prevent_destroy = true</code> as safety net, manual fix in Azure portal.<br><strong>4. Going forward:</strong> Add <code>prevent_destroy = true</code> to all production databases. Test provider upgrades in dev first.</p></div></div>
+      <div class="qa-item"><button class="qa-question">Scenario: "We need to reduce Azure costs by 40%."<span class="qa-arrow">▼</span></button><div class="qa-answer"><p><strong>1. Analyze:</strong> Export cost breakdown, identify top 5 cost drivers.<br><strong>2. Right-size:</strong> Check CPU/memory utilization — if &lt;30%, downsize (P3v3 → P2v3 = 50% savings).<br><strong>3. Reserved Instances:</strong> 1-year = 35% savings, 3-year = 55% savings on predictable workloads.<br><strong>4. Scale-in:</strong> Scheduled profiles to scale down nights/weekends.<br><strong>5. Workload optimization:</strong> Move batch jobs to Functions (Consumption), dev/test pricing for non-prod.</p></div></div>
+      <div class="qa-item"><button class="qa-question">Scenario: "A developer committed a service principal secret to GitHub."<span class="qa-arrow">▼</span></button><div class="qa-answer"><p><strong>Immediate:</strong> 1) Rotate the secret immediately — assume compromised. 2) Check Azure AD sign-in logs for unauthorized use. 3) Clean git history with <code>git filter-repo</code>. 4) Force-push and notify team to re-clone.<br><strong>Prevention:</strong> Implement OIDC (no secrets to commit), add <code>gitleaks</code> as pre-commit hook and CI check, enable GitHub Advanced Security secret scanning.</p></div></div>
+    </div>
+  </div>
+
+  <!-- CHECKLIST -->
+  <div class="tab-panel" data-group="d12" data-tab="checklist">
+    <div class="info-box green"><strong>Go through this checklist.</strong> If you can answer yes to all items, you're ready for the client interview.</div>
+    <section class="section">
+      <h2 class="section-title">Technical Knowledge</h2>
+      <ul class="checklist">
+        <li>Can explain DORA metrics without hesitation</li>
+        <li>Can design a 3-tier architecture on a whiteboard</li>
+        <li>Can explain blue-green vs canary with real examples</li>
+        <li>Can write basic Terraform HCL from memory (resource, variable, output, module)</li>
+        <li>Can explain Managed Identity and why it's better than passwords</li>
+        <li>Can walk through a CI/CD pipeline end-to-end</li>
+        <li>Can explain Terraform state and remote backends</li>
+        <li>Can describe shift-left security with specific tools at each stage</li>
+        <li>Can answer "how do you reduce Azure costs?" with concrete strategies</li>
+        <li>Can explain the difference between ACI, Container Apps, and AKS</li>
+        <li>Can explain TDE vs Always Encrypted vs Dynamic Data Masking</li>
+        <li>Can explain GitOps and how Flux works</li>
+      </ul>
+    </section>
+    <section class="section">
+      <h2 class="section-title">Practical Experience (from POCs)</h2>
+      <ul class="checklist">
+        <li>Have deployed App Service with deployment slots and auto-scaling (POC 1)</li>
+        <li>Have configured Azure SQL with TDE, DDM, and private endpoint (POC 1)</li>
+        <li>Have written Terraform with remote state, modules, and dynamic blocks (POC 1–2)</li>
+        <li>Have built a CI pipeline with quality gates and security scanning (POC 2)</li>
+        <li>Have implemented canary deployment with automated rollback (POC 3)</li>
+        <li>Have configured OIDC federated identity for pipelines (POC 4)</li>
+        <li>Have deployed AKS with GitOps using Flux (POC 5)</li>
+        <li>Have implemented Azure Policy for governance (POC 4)</li>
+      </ul>
+    </section>
+    <section class="section">
+      <h2 class="section-title">Interview Preparation</h2>
+      <ul class="checklist">
+        <li>Have practiced the top 25 questions out loud</li>
+        <li>Have STAR stories ready from the POCs you built</li>
+        <li>Can whiteboard a 3-tier architecture in 5 minutes</li>
+        <li>Know the decision matrix: ACI vs Container Apps vs AKS</li>
+        <li>Know the decision matrix: DTU vs vCore for Azure SQL</li>
+        <li>Know the decision matrix: blue-green vs canary vs feature flags</li>
+      </ul>
+    </section>
+    <div class="info-box blue" style="margin-top:32px;font-size:16px;text-align:center">
+      <strong>🎯 Good luck with the client interview!</strong><br>
+      <span style="font-weight:400">You've built 5 real POCs, learned 12 topics, and practiced 25 interview questions. You're ready.</span>
+    </div>
+  </div>
+</main>
+
+<script>
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const g = btn.dataset.group, t = btn.dataset.tab;
+    document.querySelectorAll(`.tab-btn[data-group="${g}"]`).forEach(b => b.classList.remove('active'));
+    document.querySelectorAll(`.tab-panel[data-group="${g}"]`).forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelector(`.tab-panel[data-group="${g}"][data-tab="${t}"]`).classList.add('active');
+  });
+});
+document.querySelectorAll('.qa-question').forEach(btn => {
+  btn.addEventListener('click', () => { btn.classList.toggle('open'); btn.nextElementSibling.classList.toggle('open'); });
+});
+document.querySelectorAll('.copy-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const code = btn.closest('.code-block').querySelector('pre').innerText;
+    navigator.clipboard.writeText(code).then(() => {
+      btn.textContent = 'Copied!'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+    });
+  });
+});
+</script>
+</body>
+</html>

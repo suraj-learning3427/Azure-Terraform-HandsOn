@@ -1,0 +1,35 @@
+replicaCount: 2
+
+image:
+  repository: acrpoc5prod.azurecr.io/myapp
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 20
+  targetCPUUtilizationPercentage: 70
+
+# Key Vault CSI driver configuration
+keyVault:
+  vaultName: kv-poc5-prod
+  tenantId: ""  # Set via --set or values override
+  secrets:
+    - objectName: SqlConnectionString
+      objectType: secret
+    - objectName: RedisConnectionString
+      objectType: secret

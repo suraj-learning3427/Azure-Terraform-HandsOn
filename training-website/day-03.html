@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Day 3 — Auth + APIM + Terraform Advanced</title>
+<link rel="stylesheet" href="assets/style.css"/></head>
+<body>
+<nav class="sidebar"><div class="sidebar-header"><div class="logo">⚡ Azure Training</div><div class="subtitle">Apr 7–30, 2026</div></div><ul class="nav-list"><li><a href="index.html" class="nav-link">🏠 Overview</a></li><li class="nav-section">Week 1</li><li><a href="day-01.html" class="nav-link">Day 1 — App Service + Terraform</a></li><li><a href="day-02.html" class="nav-link">Day 2 — SQL + Containers</a></li><li><a href="day-03.html" class="nav-link active">Day 3 — Auth + APIM</a></li><li class="nav-section">Week 2</li><li><a href="day-04.html" class="nav-link">Day 4 — DevOps + Modules</a></li><li><a href="day-05.html" class="nav-link">Day 5 — CI/CD + AKS</a></li><li><a href="day-06.html" class="nav-link">Day 6 — GitHub Actions</a></li><li class="nav-section">Week 3</li><li><a href="day-07.html" class="nav-link">Day 7 — Release Strategies</a></li><li><a href="day-08.html" class="nav-link">Day 8 — Canary + A/B Testing</a></li><li><a href="day-09.html" class="nav-link">Day 9 — Security</a></li><li class="nav-section">Week 4</li><li><a href="day-10.html" class="nav-link">Day 10 — Full Pipeline POC</a></li><li><a href="day-11.html" class="nav-link">Day 11 — 3-Tier + GitOps</a></li><li><a href="day-12.html" class="nav-link">Day 12 — Interview Prep</a></li></ul></nav>
+<main class="main">
+  <header class="page-header">
+    <h1>Day 3 — Auth, Key Vault, APIM + Terraform Advanced</h1>
+    <div class="day-meta"><span>📅 April 9, 2026</span><span>👥 Thulasi &amp; Swaroop</span></div>
+  </header>
+  <div class="day-nav"><a href="day-02.html" class="prev">← Day 2</a><a href="day-04.html" class="next">Day 4 →</a></div>
+
+  <div class="tabs" data-group="d3">
+    <button class="tab-btn active" data-group="d3" data-tab="theory">📖 Theory</button>
+    <button class="tab-btn" data-group="d3" data-tab="poc">🔬 Hands-On</button>
+    <button class="tab-btn" data-group="d3" data-tab="qa">❓ Interview Q&amp;A</button>
+  </div>
+
+  <div class="tab-panel active" data-group="d3" data-tab="theory">
+    <div class="info-box blue"><strong>Today's Goal:</strong> Implement Managed Identity + Key Vault for zero-credential architecture. Configure APIM with JWT validation and rate limiting. Create reusable Terraform modules.</div>
+
+    <section class="section">
+      <h2 class="section-title">The Golden Rule — No Stored Credentials</h2>
+      <div class="info-box green"><strong>Never</strong> store passwords or secrets in app settings, pipelines, or code. Use <strong>Managed Identity</strong> for all Azure resource authentication.</div>
+      <div class="code-block"><div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
+      <pre><span class="cm"># Enable Managed Identity on App Service</span>
+az webapp identity assign --name myapp --resource-group myRG
+
+<span class="cm"># Create Key Vault with RBAC (not access policies)</span>
+az keyvault create \
+  --name kv-training-dev \
+  --resource-group rg-training-dev \
+  --enable-rbac-authorization <span class="kw">true</span>
+
+<span class="cm"># Grant App Service access to read secrets</span>
+PRINCIPAL_ID=$(az webapp identity show \
+  --name myapp --resource-group myRG --query principalId -o tsv)
+
+az role assignment create \
+  --role <span class="str">"Key Vault Secrets User"</span> \
+  --assignee $PRINCIPAL_ID \
+  --scope $(az keyvault show --name kv-training-dev --query id -o tsv)
+
+<span class="cm"># Reference in App Service — no password stored anywhere!</span>
+az webapp config appsettings set \
+  --name myapp --resource-group myRG \
+  --settings <span class="str">"ConnectionStrings__Default=@Microsoft.KeyVault(VaultName=kv-training-dev;SecretName=SqlConnectionString)"</span></pre></div>
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">OAuth 2.0 Flows — Which to Use</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Scenario</th><th>Flow</th></tr></thead>
+        <tbody>
+          <tr><td>Web app with user sign-in</td><td>Authorization Code + PKCE</td></tr>
+          <tr><td><strong>Background service calling API (no user)</strong></td><td><strong>Client Credentials</strong></td></tr>
+          <tr><td>API calling another API on behalf of user</td><td>On-Behalf-Of (OBO)</td></tr>
+          <tr><td>CLI tool / IoT device</td><td>Device Code</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">APIM Policy Pipeline</h2>
+      <div class="info-box purple">Request → <strong>[Inbound]</strong> → Backend → <strong>[Outbound]</strong> → Response. Errors go to <strong>[On-Error]</strong>.</div>
+      <div class="code-block"><div class="code-header"><span class="code-lang">xml — APIM Policies</span><button class="copy-btn">Copy</button></div>
+      <pre><span class="op">&lt;policies&gt;</span>
+  <span class="op">&lt;inbound&gt;</span>
+    <span class="cm">&lt;!-- 1. Validate JWT from Azure AD --&gt;</span>
+    <span class="op">&lt;validate-jwt</span> header-name=<span class="str">"Authorization"</span> failed-validation-httpcode=<span class="str">"401"</span><span class="op">&gt;</span>
+      <span class="op">&lt;openid-config</span> url=<span class="str">"https://login.microsoftonline.com/{tenant}/.well-known/openid-configuration"</span> <span class="op">/&gt;</span>
+      <span class="op">&lt;required-claims&gt;&lt;claim</span> name=<span class="str">"aud"</span><span class="op">&gt;&lt;value&gt;</span>api://my-api-id<span class="op">&lt;/value&gt;&lt;/claim&gt;&lt;/required-claims&gt;</span>
+    <span class="op">&lt;/validate-jwt&gt;</span>
+
+    <span class="cm">&lt;!-- 2. Rate limit: 100 calls/minute per subscription --&gt;</span>
+    <span class="op">&lt;rate-limit</span> calls=<span class="str">"100"</span> renewal-period=<span class="str">"60"</span> <span class="op">/&gt;</span>
+
+    <span class="cm">&lt;!-- 3. Cache GET requests for 5 minutes --&gt;</span>
+    <span class="op">&lt;cache-lookup</span> vary-by-developer=<span class="str">"false"</span> vary-by-developer-groups=<span class="str">"false"</span> <span class="op">/&gt;</span>
+    <span class="op">&lt;base /&gt;</span>
+  <span class="op">&lt;/inbound&gt;</span>
+  <span class="op">&lt;outbound&gt;</span>
+    <span class="op">&lt;cache-store</span> duration=<span class="str">"300"</span> <span class="op">/&gt;</span>
+    <span class="op">&lt;base /&gt;</span>
+  <span class="op">&lt;/outbound&gt;</span>
+<span class="op">&lt;/policies&gt;</span></pre></div>
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">Terraform Modules</h2>
+      <div class="code-block"><div class="code-header"><span class="code-lang">hcl — Module Structure</span><button class="copy-btn">Copy</button></div>
+      <pre><span class="cm"># modules/networking/main.tf</span>
+<span class="kw">resource</span> <span class="str">"azurerm_virtual_network"</span> <span class="str">"main"</span> {
+  name          = <span class="kw">var</span>.vnet_name
+  address_space = <span class="kw">var</span>.address_space
+  <span class="cm"># ...</span>
+}
+
+<span class="kw">resource</span> <span class="str">"azurerm_subnet"</span> <span class="str">"main"</span> {
+  <span class="kw">for_each</span>             = <span class="kw">var</span>.subnets
+  name                 = each.key
+  address_prefixes     = [each.value]
+  virtual_network_name = azurerm_virtual_network.main.name
+  <span class="cm"># ...</span>
+}
+
+<span class="cm"># modules/networking/outputs.tf</span>
+output <span class="str">"subnet_ids"</span> {
+  value = { <span class="kw">for</span> k, v <span class="kw">in</span> azurerm_subnet.main : k => v.id }
+}
+
+<span class="cm"># Calling the module</span>
+module <span class="str">"networking"</span> {
+  source        = <span class="str">"./modules/networking"</span>
+  vnet_name     = <span class="str">"vnet-myapp-prod"</span>
+  address_space = [<span class="str">"10.0.0.0/16"</span>]
+  subnets = {
+    web  = <span class="str">"10.0.1.0/24"</span>
+    app  = <span class="str">"10.0.2.0/24"</span>
+    data = <span class="str">"10.0.3.0/24"</span>
+  }
+}
+
+<span class="cm"># Use module output</span>
+resource <span class="str">"azurerm_linux_web_app"</span> <span class="str">"main"</span> {
+  virtual_network_subnet_id = module.networking.subnet_ids[<span class="str">"web"</span>]
+}</pre></div>
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">Dynamic Blocks + count vs for_each</h2>
+      <div class="two-col">
+        <div class="card">
+          <div class="card-title">❌ count — Index Instability</div>
+          <p>Removing index 1 shifts all others. Terraform may destroy/recreate resources unnecessarily.</p>
+        </div>
+        <div class="card">
+          <div class="card-title">✅ for_each — Stable Keys</div>
+          <p>Removing "staging" only affects that one resource. All others unchanged.</p>
+        </div>
+      </div>
+      <div class="code-block"><div class="code-header"><span class="code-lang">hcl — Dynamic Block</span><button class="copy-btn">Copy</button></div>
+      <pre><span class="kw">resource</span> <span class="str">"azurerm_network_security_group"</span> <span class="str">"main"</span> {
+  <span class="cm"># ...</span>
+  <span class="kw">dynamic</span> <span class="str">"security_rule"</span> {
+    <span class="kw">for_each</span> = <span class="kw">var</span>.nsg_rules
+    content {
+      name                   = security_rule.value.name
+      priority               = security_rule.value.priority
+      direction              = security_rule.value.direction
+      access                 = security_rule.value.access
+      destination_port_range = security_rule.value.port
+      <span class="cm"># ...</span>
+    }
+  }
+}</pre></div>
+    </section>
+  </div>
+
+  <div class="tab-panel" data-group="d3" data-tab="poc">
+    <div class="info-box blue"><strong>Hands-On:</strong> Refactor POC 1 networking into a reusable module. Add Key Vault with Managed Identity access.</div>
+    <section class="section">
+      <h2 class="section-title">Extract Networking Module</h2>
+      <div class="code-block"><div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div>
+      <pre>mkdir -p modules/networking
+<span class="cm"># Move VNet, subnet, NSG resources to modules/networking/main.tf</span>
+<span class="cm"># Add variables.tf and outputs.tf</span>
+<span class="cm"># Update root main.tf to call the module</span>
+terraform init  <span class="cm"># Re-initialize after adding module</span>
+terraform plan  <span class="cm"># Should show 0 changes (same resources, different structure)</span></pre></div>
+    </section>
+    <section class="section">
+      <h2 class="section-title">✅ Validation Checklist</h2>
+      <ul class="checklist">
+        <li>Module created with main.tf, variables.tf, outputs.tf</li>
+        <li>terraform plan shows 0 changes after refactor</li>
+        <li>Key Vault created with RBAC authorization enabled</li>
+        <li>App Service Managed Identity has Key Vault Secrets User role</li>
+        <li>App settings use Key Vault references (no plaintext secrets)</li>
+      </ul>
+    </section>
+  </div>
+
+  <div class="tab-panel" data-group="d3" data-tab="qa">
+    <div class="qa-list">
+      <div class="qa-item"><button class="qa-question">What is the difference between a Managed Identity and a Service Principal? <span class="qa-arrow">▼</span></button><div class="qa-answer"><p>A Service Principal is an app identity in Azure AD — you manage its credentials (secrets/certificates) and must rotate them. A Managed Identity is a special service principal whose credentials are automatically managed by Azure — you never see or rotate them. Always use Managed Identity when the resource supports it (App Service, Functions, AKS, VMs). Use a Service Principal only when Managed Identity isn't available (on-premises apps, GitHub Actions with OIDC).</p></div></div>
+      <div class="qa-item"><button class="qa-question">What is the difference between system-assigned and user-assigned Managed Identity? <span class="qa-arrow">▼</span></button><div class="qa-answer"><p>System-assigned: tied to one resource, deleted when the resource is deleted. User-assigned: independent lifecycle, can be shared across multiple resources. Use user-assigned when multiple resources need the same identity (e.g., 5 App Services all need to read the same Key Vault).</p></div></div>
+      <div class="qa-item"><button class="qa-question">How do you debug a 401 error from APIM even though the client has a valid token? <span class="qa-arrow">▼</span></button><div class="qa-answer"><p>1) Enable APIM tracing (add <code>Ocp-Apim-Trace: true</code> header). 2) Check the trace — it shows exactly which policy failed. 3) Common causes: wrong <code>aud</code> claim (token audience must match the API's App ID URI), wrong tenant ID in <code>openid-config</code> URL, expired token. 4) Paste the Bearer token into jwt.ms to inspect claims.</p></div></div>
+      <div class="qa-item"><button class="qa-question">When would you use <code>for_each</code> vs <code>count</code> in Terraform? <span class="qa-arrow">▼</span></button><div class="qa-answer"><p>Use <code>for_each</code> for almost everything. <code>count</code> has index instability — if you remove the middle item from a list, Terraform sees all subsequent items as changed and may destroy/recreate them. <code>for_each</code> uses stable string keys — removing one item only affects that resource. Use <code>count</code> only for optional resources: <code>count = var.enabled ? 1 : 0</code>.</p></div></div>
+      <div class="qa-item"><button class="qa-question">What is the difference between APIM <code>rate-limit</code> and <code>quota</code>? <span class="qa-arrow">▼</span></button><div class="qa-answer"><p><code>rate-limit</code> enforces a short-term rate (e.g., 100 calls/minute) and resets every renewal period — burst protection. <code>quota</code> enforces a longer-term limit (e.g., 10,000 calls/month) that doesn't reset until the quota period ends — billing/tier enforcement. Use both together.</p></div></div>
+    </div>
+  </div>
+</main>
+<script src="assets/app.js"></script>
+</body></html>

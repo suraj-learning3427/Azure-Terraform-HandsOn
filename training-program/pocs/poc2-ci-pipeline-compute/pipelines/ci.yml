@@ -1,0 +1,153 @@
+# POC 2: CI Pipeline — Build, Test, SAST, Deploy to VMSS
+trigger:
+  branches:
+    include: [main]
+  paths:
+    exclude: ['*.md', 'docs/**']
+
+pr:
+  branches:
+    include: [main]
+
+variables:
+  buildConfiguration: Release
+  dotnetVersion: '8.0.x'
+  vmImage: ubuntu-latest
+
+stages:
+  # ── Stage 1: Build ──────────────────────────────────────────────────────────
+  - stage: Build
+    displayName: Build and Test
+    jobs:
+      - job: BuildTest
+        pool:
+          vmImage: $(vmImage)
+        steps:
+          - task: UseDotNet@2
+            displayName: Install .NET SDK
+            inputs:
+              version: $(dotnetVersion)
+
+          - task: DotNetCoreCLI@2
+            displayName: Restore dependencies
+            inputs:
+              command: restore
+              projects: '**/*.csproj'
+
+          # SonarCloud prepare (before build)
+          - task: SonarCloudPrepare@1
+            displayName: Prepare SonarCloud analysis
+            inputs:
+              SonarCloud: 'SonarCloud'
+              organization: '$(sonarOrganization)'
+              scannerMode: 'MSBuild'
+              projectKey: '$(sonarProjectKey)'
+              extraProperties: |
+                sonar.cs.opencover.reportsPaths=$(Agent.TempDirectory)/**/coverage.opencover.xml
+
+          - task: DotNetCoreCLI@2
+            displayName: Build
+            inputs:
+              command: build
+              projects: '**/*.csproj'
+              arguments: '--configuration $(buildConfiguration) --no-restore'
+
+          - task: DotNetCoreCLI@2
+            displayName: Run unit tests with coverage
+            inputs:
+              command: test
+              projects: '**/*Tests.csproj'
+              arguments: >
+                --configuration $(buildConfiguration)
+                --no-build
+                --collect:"XPlat Code Coverage"
+                --results-directory $(Agent.TempDirectory)
+                -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
+
+          - task: PublishTestResults@2
+            displayName: Publish test results
+            inputs:
+              testResultsFormat: VSTest
+              testResultsFiles: '**/*.trx'
+              failTaskOnFailedTests: true
+
+          - task: PublishCodeCoverageResults@1
+            displayName: Publish code coverage
+            inputs:
+              codeCoverageTool: Cobertura
+              summaryFileLocation: '$(Agent.TempDirectory)/**/coverage.cobertura.xml'
+              failIfCoverageEmpty: true
+
+          # Enforce minimum coverage threshold
+          - script: |
+              COVERAGE=$(grep -oP 'line-rate="\K[^"]+' $(Agent.TempDirectory)/**/coverage.cobertura.xml | head -1)
+              COVERAGE_PCT=$(echo "$COVERAGE * 100" | bc)
+              echo "Code coverage: $COVERAGE_PCT%"
+              if (( $(echo "$COVERAGE_PCT < 80" | bc -l) )); then
+                echo "##vso[task.logissue type=error]Coverage $COVERAGE_PCT% is below 80% threshold"
+                exit 1
+              fi
+            displayName: Enforce 80% coverage threshold
+
+          # SonarCloud analyze and publish
+          - task: SonarCloudAnalyze@1
+            displayName: Run SonarCloud analysis
+
+          - task: SonarCloudPublish@1
+            displayName: Publish SonarCloud results
+            inputs:
+              pollingTimeoutSec: '300'
+
+          - task: DotNetCoreCLI@2
+            displayName: Publish application
+            inputs:
+              command: publish
+              publishWebProjects: true
+              arguments: '--configuration $(buildConfiguration) --output $(Build.ArtifactStagingDirectory)'
+
+          - task: PublishBuildArtifacts@1
+            displayName: Publish artifact
+            inputs:
+              PathtoPublish: $(Build.ArtifactStagingDirectory)
+              ArtifactName: webapp
+
+  # ── Stage 2: Deploy to Dev VMSS ─────────────────────────────────────────────
+  - stage: Deploy_Dev
+    displayName: Deploy to Dev
+    dependsOn: Build
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    jobs:
+      - deployment: DeployToVMSS
+        displayName: Deploy to VMSS
+        environment: dev
+        pool:
+          vmImage: $(vmImage)
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: DownloadBuildArtifacts@1
+                  inputs:
+                    artifactName: webapp
+
+                - task: AzureCLI@2
+                  displayName: Deploy to VMSS via custom script
+                  inputs:
+                    azureSubscription: 'MyAzureServiceConnection'
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: |
+                      # Upload artifact to storage
+                      az storage blob upload \
+                        --account-name $(storageAccountName) \
+                        --container-name deployments \
+                        --name webapp-$(Build.BuildId).zip \
+                        --file $(System.ArtifactsDirectory)/webapp/*.zip
+
+                      # Trigger VMSS extension to pull and deploy
+                      az vmss extension set \
+                        --resource-group $(resourceGroupName) \
+                        --vmss-name $(vmssName) \
+                        --name customScript \
+                        --publisher Microsoft.Azure.Extensions \
+                        --settings '{"fileUris":["https://$(storageAccountName).blob.core.windows.net/scripts/deploy.sh"],"commandToExecute":"./deploy.sh webapp-$(Build.BuildId).zip"}'

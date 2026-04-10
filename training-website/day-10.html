@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Day 10 — Infrastructure + App Pipeline (Full POC 4)</title>
+<link rel="stylesheet" href="assets/style.css"/></head>
+<body>
+<nav class="sidebar"><div class="sidebar-header"><div class="logo">⚡ Azure Training</div><div class="subtitle">Apr 7–30, 2026</div></div><ul class="nav-list"><li><a href="index.html" class="nav-link">🏠 Overview</a></li><li class="nav-section">Week 1</li><li><a href="day-01.html" class="nav-link">Day 1 — App Service + Terraform</a></li><li><a href="day-02.html" class="nav-link">Day 2 — SQL + Containers</a></li><li><a href="day-03.html" class="nav-link">Day 3 — Auth + APIM</a></li><li class="nav-section">Week 2</li><li><a href="day-04.html" class="nav-link">Day 4 — DevOps + Modules</a></li><li><a href="day-05.html" class="nav-link">Day 5 — CI/CD + AKS</a></li><li><a href="day-06.html" class="nav-link">Day 6 — GitHub Actions</a></li><li class="nav-section">Week 3</li><li><a href="day-07.html" class="nav-link">Day 7 — Release Strategies</a></li><li><a href="day-08.html" class="nav-link">Day 8 — Canary + A/B Testing</a></li><li><a href="day-09.html" class="nav-link">Day 9 — Security</a></li><li class="nav-section">Week 4</li><li><a href="day-10.html" class="nav-link active">Day 10 — Full Pipeline POC</a></li><li><a href="day-11.html" class="nav-link">Day 11 — 3-Tier + GitOps</a></li><li><a href="day-12.html" class="nav-link">Day 12 — Interview Prep</a></li></ul></nav>
+
+<main class="main">
+  <header class="page-header">
+    <h1>Day 10 — Infrastructure + App Pipeline (Full POC 4)</h1>
+    <div class="day-meta"><span>📅 April 28, 2026</span><span>👥 Vijay &amp; Manju</span><span>🔬 POC 4</span></div>
+  </header>
+  <div class="day-nav"><a href="day-09.html" class="prev">← Day 9</a><a href="day-11.html" class="next">Day 11 →</a></div>
+
+  <div class="tabs" data-group="d10">
+    <button class="tab-btn active" data-group="d10" data-tab="theory">📖 Theory</button>
+    <button class="tab-btn" data-group="d10" data-tab="poc">🔬 POC 4</button>
+    <button class="tab-btn" data-group="d10" data-tab="qa">❓ Interview Q&amp;A</button>
+  </div>
+
+  <!-- THEORY -->
+  <div class="tab-panel active" data-group="d10" data-tab="theory">
+    <div class="info-box blue"><strong>Today's Goal:</strong> OIDC federated identity for pipelines (no stored secrets). Full pipeline: Terraform provisions infrastructure → App deploys on top. Key Vault + Azure Policy + Monitoring all together.</div>
+
+    <section class="section">
+      <h2 class="section-title">OIDC Federated Identity for Azure DevOps</h2>
+      <div class="two-col">
+        <div class="card">
+          <div class="card-title">❌ Traditional (Bad)</div>
+          <p>Store service principal secret in Azure DevOps → secret expires → gets leaked → needs manual rotation → security risk.</p>
+        </div>
+        <div class="card">
+          <div class="card-title">✅ OIDC (Good)</div>
+          <p>Azure DevOps gets short-lived token from Microsoft's identity provider → Azure trusts it → no stored secrets anywhere.</p>
+        </div>
+      </div>
+      <div class="code-block"><div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div><pre><span class="cm"># 1. Create app registration</span>
+az ad app create --display-name <span class="str">"sp-terraform-pipeline"</span>
+APP_ID=$(az ad app list --display-name <span class="str">"sp-terraform-pipeline"</span> --query <span class="str">"[0].appId"</span> -o tsv)
+az ad sp create --id $APP_ID
+
+<span class="cm"># 2. Add federated credential for Azure DevOps</span>
+az ad app federated-credential create \
+  --id $APP_ID \
+  --parameters <span class="str">'{
+    "name": "ado-pipeline-prod",
+    "issuer": "https://vstoken.dev.azure.com/myOrganization",
+    "subject": "sc://myOrganization/myProject/MyServiceConnection",
+    "audiences": ["api://AzureADTokenExchange"]
+  }'</span>
+
+<span class="cm"># 3. Grant Contributor on subscription</span>
+az role assignment create \
+  --role Contributor \
+  --assignee $APP_ID \
+  --scope /subscriptions/$(az account show --query id -o tsv)
+
+<span class="cm"># 4. In Azure DevOps: create service connection</span>
+<span class="cm"># Project Settings → Service Connections → New → Azure Resource Manager</span>
+<span class="cm"># → Workload Identity Federation (automatic)</span></pre></div>
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">POC 4 Architecture</h2>
+      <div class="card">
+        <pre style="font-family:var(--mono);font-size:13px;color:var(--gray-600);line-height:1.8">Azure DevOps Pipeline (OIDC auth — no stored secrets)
+    ↓
+Stage 1: Terraform Apply
+    → Resource Group, VNet, Key Vault (RBAC)
+    → Azure Policy Initiative (tagging + regions)
+    → Log Analytics + Application Insights + Alerts
+    → App Service with Managed Identity
+
+Stage 2: App Deploy
+    → Deploy app to staging slot
+    → App reads secrets from Key Vault via Managed Identity
+    → Swap to production</pre>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">Full Pipeline YAML</h2>
+      <div class="code-block"><div class="code-header"><span class="code-lang">yaml</span><button class="copy-btn">Copy</button></div><pre><span class="kw">trigger:</span>
+  <span class="kw">branches:</span>
+    <span class="kw">include:</span> [main]
+
+<span class="kw">stages:</span>
+  <span class="cm"># Stage 1: Provision Infrastructure</span>
+  - <span class="kw">stage:</span> Infra
+    <span class="kw">jobs:</span>
+      - <span class="kw">job:</span> TerraformApply
+        <span class="kw">steps:</span>
+          - <span class="kw">task:</span> AzureCLI@2
+            <span class="kw">inputs:</span>
+              <span class="kw">azureSubscription:</span> <span class="str">'MyOIDCServiceConnection'</span>
+              <span class="kw">addSpnToEnvironment:</span> <span class="kw">true</span>
+              <span class="kw">inlineScript:</span> |
+                <span class="kw">export</span> ARM_USE_OIDC=true
+                <span class="kw">export</span> ARM_OIDC_TOKEN=$idToken
+                <span class="kw">export</span> ARM_TENANT_ID=$tenantId
+                <span class="kw">export</span> ARM_CLIENT_ID=$servicePrincipalId
+                cd terraform
+                terraform init
+                terraform plan -out=tfplan
+                terraform apply tfplan
+
+  <span class="cm"># Stage 2: Deploy Application</span>
+  - <span class="kw">stage:</span> Deploy
+    <span class="kw">dependsOn:</span> Infra
+    <span class="kw">jobs:</span>
+      - <span class="kw">deployment:</span> DeployApp
+        <span class="kw">environment:</span> production
+        <span class="kw">strategy:</span>
+          <span class="kw">runOnce:</span>
+            <span class="kw">deploy:</span>
+              <span class="kw">steps:</span>
+                - <span class="kw">task:</span> AzureWebApp@1
+                  <span class="kw">inputs:</span>
+                    <span class="kw">azureSubscription:</span> <span class="str">'MyOIDCServiceConnection'</span>
+                    <span class="kw">appName:</span> app-poc4-prod
+                    <span class="kw">deployToSlotOrASE:</span> <span class="kw">true</span>
+                    <span class="kw">slotName:</span> staging
+                - <span class="kw">task:</span> AzureAppServiceManage@0
+                  <span class="kw">inputs:</span>
+                    <span class="kw">Action:</span> <span class="str">'Swap Slots'</span>
+                    <span class="kw">WebAppName:</span> app-poc4-prod
+                    <span class="kw">SourceSlot:</span> staging</pre></div>
+    </section>
+  </div>
+
+  <!-- POC -->
+  <div class="tab-panel" data-group="d10" data-tab="poc">
+    <div class="info-box blue"><strong>POC 4 Validation:</strong> Verify no stored credentials, Key Vault audit logs, policy compliance, and alert rules.</div>
+    <section class="section">
+      <h2 class="section-title">Validation Checklist</h2>
+      <ul class="checklist">
+        <li>Pipeline runs with no stored service principal secrets (OIDC only)</li>
+        <li>Key Vault RBAC enabled (not access policies)</li>
+        <li>App Service reads secrets via Key Vault references (no plaintext in app settings)</li>
+        <li>Azure Policy assignment visible and compliance &gt; 90%</li>
+        <li>Log Analytics workspace receiving diagnostic logs</li>
+        <li>Application Insights alert rule active</li>
+        <li>Alert fires on simulated error (test alert button)</li>
+      </ul>
+      <div class="code-block"><div class="code-header"><span class="code-lang">bash</span><button class="copy-btn">Copy</button></div><pre><span class="cm"># Key Vault RBAC enabled</span>
+az keyvault show --name kv-poc4-prod --resource-group rg-poc4 \
+  --query <span class="str">"properties.enableRbacAuthorization"</span> -o tsv
+
+<span class="cm"># Policy compliance</span>
+az policy state list --resource-group rg-poc4 \
+  --query <span class="str">"[?complianceState=='NonCompliant'].{resource:resourceId}"</span> -o table
+
+<span class="cm"># Alert rule active</span>
+az monitor metrics alert show --name alert-error-rate \
+  --resource-group rg-poc4 --query <span class="str">"enabled"</span> -o tsv</pre></div>
+    </section>
+  </div>
+
+  <!-- Q&A -->
+  <div class="tab-panel" data-group="d10" data-tab="qa">
+    <div class="qa-list">
+      <div class="qa-item"><button class="qa-question">What is OIDC federated identity and why is it better than service principal secrets?<span class="qa-arrow">▼</span></button><div class="qa-answer"><p>OIDC allows Azure DevOps pipelines to authenticate to Azure using short-lived tokens — no credentials stored anywhere. Azure trusts Azure DevOps's OIDC issuer and issues access tokens based on the pipeline's identity (organization + project + service connection). No secrets to rotate, no risk of credential leakage. Traditional service principal secrets expire, can be leaked from pipeline logs, and require manual rotation.</p></div></div>
+      <div class="qa-item"><button class="qa-question">How do you use Terraform in a CI/CD pipeline securely?<span class="qa-arrow">▼</span></button><div class="qa-answer"><p>1) Use OIDC federated identity — no stored ARM credentials. 2) Store state in Azure Storage with state locking. 3) Run <code>terraform plan</code> in CI (PR validation) — fail if plan shows unexpected changes. 4) Run <code>terraform apply</code> only on main branch after approval. 5) Use separate state files per environment. 6) Never run <code>terraform destroy</code> in automated pipelines.</p></div></div>
+      <div class="qa-item"><button class="qa-question">What is the difference between Azure Monitor and Application Insights?<span class="qa-arrow">▼</span></button><div class="qa-answer"><p>Azure Monitor is the umbrella platform for all monitoring in Azure — it collects metrics, logs, and alerts from Azure resources (VMs, App Service, SQL, etc.). Application Insights is a feature of Azure Monitor specifically for application performance monitoring — it provides distributed tracing, request/dependency tracking, custom events, and availability tests. Use both: Azure Monitor for infrastructure metrics, Application Insights for application-level observability.</p></div></div>
+      <div class="qa-item"><button class="qa-question">What happens if Terraform apply fails halfway through?<span class="qa-arrow">▼</span></button><div class="qa-answer"><p>Some resources are created, some aren't — partial state. Terraform records what was created in state. Run <code>terraform plan</code> to see what's missing. Usually safe to re-run <code>terraform apply</code> — Terraform will only create the missing resources. For resources that partially created, you may need to <code>terraform destroy</code> that specific resource and re-apply. Always check state with <code>terraform state list</code> after a failed apply.</p></div></div>
+    </div>
+  </div>
+</main>
+
+<script>
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const g = btn.dataset.group, t = btn.dataset.tab;
+    document.querySelectorAll(`.tab-btn[data-group="${g}"]`).forEach(b => b.classList.remove('active'));
+    document.querySelectorAll(`.tab-panel[data-group="${g}"]`).forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelector(`.tab-panel[data-group="${g}"][data-tab="${t}"]`).classList.add('active');
+  });
+});
+document.querySelectorAll('.qa-question').forEach(btn => {
+  btn.addEventListener('click', () => { btn.classList.toggle('open'); btn.nextElementSibling.classList.toggle('open'); });
+});
+document.querySelectorAll('.copy-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const code = btn.closest('.code-block').querySelector('pre').innerText;
+    navigator.clipboard.writeText(code).then(() => {
+      btn.textContent = 'Copied!'; btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+    });
+  });
+});
+</script>
+</body>
+</html>
